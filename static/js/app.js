@@ -930,14 +930,33 @@ const $main = document.getElementById('main');
       }).join('');
       html += '</tbody></table>';
 
-      html += '<h3 style="margin-top:18px">Player Stats</h3>';
-      html += '<table><thead><tr><th>#</th><th>Player</th><th>Pos</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">PIM</th></tr></thead><tbody>';
-      html += data.stats.sort((a,b) => b.pts - a.pts).map(p => `
-        <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
-          <td>${p.jersey || '-'}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
-          <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td><td class="num">${p.pim}</td>
-        </tr>`).join('');
-      html += '</tbody></table>';
+      // Full roster: position-grouped sections + goalies
+      const roster = data.roster || { sections: [], goalies: [] };
+      const totalPlayers = roster.sections.reduce((n, s) => n + s.players.length, 0) + roster.goalies.length;
+      html += `<h3 style="margin-top:18px">Full Roster${totalPlayers ? ` <span style="color:var(--muted);font-weight:600">${totalPlayers}</span>` : ''}</h3>`;
+
+      const skaterHead = '<table><thead><tr><th>#</th><th>Player</th><th>Pos</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">P/GP</th><th class="num">PIM</th></tr></thead><tbody>';
+      roster.sections.forEach(sec => {
+        html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
+        html += skaterHead + sec.players.slice().sort((a, b) => b.pts - a.pts).map(p => `
+          <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+            <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
+            <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td>
+            <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim}</td>
+          </tr>`).join('') + '</tbody></table>';
+      });
+
+      if (roster.goalies.length) {
+        html += '<div class="form-chips-label">Goalies</div>';
+        html += '<table><thead><tr><th>#</th><th>Goalie</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">GA</th><th class="num">GAA</th></tr></thead><tbody>';
+        html += roster.goalies.map(p => `
+          <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+            <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
+            <td class="num">${p.gp}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
+            <td class="num">${p.ga}</td><td class="num">${typeof p.gaa === 'number' ? p.gaa.toFixed(1) : p.gaa}</td>
+          </tr>`).join('');
+        html += '</tbody></table>';
+      }
 
       $content.innerHTML = html;
       animateNumbers($content);

@@ -637,45 +637,85 @@ def parse_team_schedule(team_id):
     return games, None
 
 
+def _num(s):
+    """Parse an int, falling back to float (e.g. GAA '2.4'), else 0."""
+    s = (s or "").strip()
+    try:
+        return int(s)
+    except ValueError:
+        try:
+            return float(s)
+        except ValueError:
+            return 0
+
+
 def parse_team_stats(team_id):
+    """Full roster: every stat table on the page, grouped by section heading.
+
+    The stats page groups players into sections (e.g. an unlabeled skaters
+    table, FORWARDS, DEFENSE) and a GOALIES table with W/L/OTL/GA/GAA.
+    Returns {"sections": [{label, players}], "goalies": [...]}.
+    """
     soup, err = get_soup(f"/team/stats.cfm?TeamID={team_id}")
     if err:
         return None, err
 
-    players = []
-    table = soup.find("table", attrs={"data-provide": "datatable"})
-    if not table:
-        table = soup.find("table", class_=re.compile("table"))
-    if not table:
-        return players, None
+    result = {"sections": [], "goalies": []}
+    current_label = None
 
-    header = [c.get_text(strip=True).lower() for c in table.find("thead").find_all("th")] if table.find("thead") else []
-    rows = table.find("tbody").find_all("tr") if table.find("tbody") else []
+    skater_cols = ["gp", "g", "a", "pts", "pim", "esg", "ppg", "shg", "psg", "sog"]
+    goalie_cols = ["gp", "w", "l", "otl", "ga", "gaa"]
 
-    stats_cols = ["jersey", "name", "position", "gp", "g", "a", "pts", "pim", "esg", "ppg", "shg", "psg", "sog"]
-    for row in rows:
-        cells = row.find_all("td")
-        if len(cells) < 7:
+    for el in soup.find_all(["h2", "table"]):
+        if el.name == "h2":
+            txt = _text(el)
+            if txt:
+                current_label = txt
             continue
-        player_link = cells[1].find("a", href=True)
-        token = None
-        if player_link:
-            href = player_link.get("href", "")
-            if re.match(r"^[0-9A-Fa-f]+$", href.split("?")[-1]):
-                token = href.split("?")[-1]
 
-        player = {
-            "jersey": _score_to_int(_text(cells[0])),
-            "name": _text(player_link) if player_link else _text(cells[1]),
-            "position": _text(cells[2]),
-            "token": token,
-        }
-        # numeric columns after name/position
-        for i, col in enumerate(stats_cols[3:], start=3):
-            player[col] = _score_to_int(_text(cells[i])) if i < len(cells) else 0
-        players.append(player)
+        thead = el.find("thead")
+        if not thead:
+            continue
+        headers = [c.get_text(strip=True).lower() for c in thead.find_all("th")]
+        if "jersey" not in headers or "gp" not in headers:
+            continue  # skip unrelated tables (stick & puck / drop-in schedules)
 
-    return players, None
+        is_goalie = "gaa" in headers
+        cols = goalie_cols if is_goalie else skater_cols
+        tbody = el.find("tbody")
+        rows = tbody.find_all("tr") if tbody else []
+
+        for row in rows:
+            cells = row.find_all("td")
+            if len(cells) < 4:
+                continue
+            link = cells[1].find("a", href=True)
+            token = None
+            if link:
+                q = link.get("href", "").split("?")[-1]
+                if re.match(r"^[0-9A-Fa-f]+$", q):
+                    token = q
+
+            player = {
+                "jersey": _text(cells[0]) or "-",
+                "name": _text(link) if link else _text(cells[1]),
+                "position": _text(cells[2]),
+                "token": token,
+            }
+            for i, col in enumerate(cols, start=3):
+                player[col] = _num(_text(cells[i])) if i < len(cells) else 0
+
+            if is_goalie:
+                result["goalies"].append(player)
+            else:
+                label = current_label or "Skaters"
+                sec = next((s for s in result["sections"] if s["label"] == label), None)
+                if not sec:
+                    sec = {"label": label, "players": []}
+                    result["sections"].append(sec)
+                sec["players"].append(player)
+
+    return result, None
 
 
 def parse_team_standings(team_id):

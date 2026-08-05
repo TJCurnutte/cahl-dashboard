@@ -79,7 +79,7 @@ def team(team_id):
     return jsonify({
         "overview": over,
         "schedule": sched,
-        "stats": stats,
+        "roster": stats,
         "standings": stand,
         "form": scraper.compute_team_form(sched or [], team_id),
     })
