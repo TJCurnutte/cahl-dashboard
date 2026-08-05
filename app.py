@@ -88,6 +88,24 @@ def teams():
     return jsonify(data)
 
 
+_SESSIONS_CACHE = {}
+_SESSIONS_TTL = 300  # 5 minutes; aggregating every team's schedule is expensive
+
+
+@app.route("/api/sessions/<league_id>")
+def sessions(league_id):
+    import time
+    now = time.time()
+    cached = _SESSIONS_CACHE.get(league_id)
+    if cached and now - cached["ts"] < _SESSIONS_TTL:
+        return jsonify(cached["data"])
+    data, err = scraper.parse_league_sessions(league_id)
+    if err:
+        return jsonify({"error": err}), 502
+    _SESSIONS_CACHE[league_id] = {"data": data, "ts": now}
+    return jsonify(data)
+
+
 @app.route("/api/player/<team_id>/<player_id>")
 def player(team_id, player_id):
     data, err = scraper.parse_player_history(team_id, player_id)
@@ -105,6 +123,7 @@ def refresh():
     scraper.clear_cache()
     _TEAMS_CACHE["data"] = None
     _TEAMS_CACHE["ts"] = 0
+    _SESSIONS_CACHE.clear()
     return jsonify({"ok": True})
 
 

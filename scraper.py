@@ -777,6 +777,61 @@ def parse_all_teams(max_workers=8):
     return sorted(teams.values(), key=lambda t: t["name"].lower()), None
 
 
+def parse_league_sessions(league_id, max_workers=8):
+    """Aggregate every game in a league's season, grouped by date ("session").
+
+    Each team's schedule page lists the same games, so we dedupe by
+    (date, time, home, away). Returns sessions in chronological order.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    dash, err = parse_dashboard(league_id)
+    if err:
+        return None, err
+
+    team_ids = [s["team_id"] for s in dash.get("standings", []) if s.get("team_id")]
+    games = {}
+    errors = []
+
+    def fetch(tid):
+        sched, e = parse_team_schedule(tid)
+        if e:
+            errors.append(e)
+            return
+        for g in sched:
+            key = (g["date"], g["time"], g["home"].strip().lower(), g["away"].strip().lower())
+            if key not in games:
+                games[key] = g
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(fetch, team_ids))
+
+    if not games and errors:
+        return None, "; ".join(errors[:3])
+
+    def game_date(g):
+        try:
+            d = datetime.strptime(f"{g['date']} {datetime.now().year}", "%b %d %Y")
+            # If a parsed date lands far in the future, it belongs to last year
+            if (d - datetime.now()).days > 200:
+                d = d.replace(year=d.year - 1)
+            return d
+        except Exception:
+            return datetime.min
+
+    by_date = {}
+    for g in sorted(games.values(), key=game_date):
+        by_date.setdefault(g["date"], []).append(g)
+
+    sessions = [{"date": date, "games": gs} for date, gs in by_date.items()]
+
+    return {
+        "league_name": dash.get("league_name", ""),
+        "season": dash.get("season", ""),
+        "sessions": sessions,
+    }, None
+
+
 def compute_team_form(games, team_id):
     """Derive a team's season record, form, and streaks from its schedule.
 

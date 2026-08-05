@@ -15,6 +15,8 @@ const $main = document.getElementById('main');
       allTeamsLoading: false,
       playersLeague: localStorage.getItem('cahl-players-league') || '',
       playersDay: '',
+      _sessions: null,
+      sessionDate: '',
       leaders: null,
       cache: {}
     };
@@ -346,6 +348,8 @@ const $main = document.getElementById('main');
       $refresh.appendChild(Object.assign(document.createElement('span'), { className: 'spinner' }));
       await fetch('/api/refresh', { method: 'POST' });
       state.cache = {};
+      state._sessions = null;
+      state.allTeams = [];
       await loadActiveTab(true);
       $refresh.innerHTML = 'Refresh';
       $refresh.disabled = false;
@@ -462,10 +466,16 @@ const $main = document.getElementById('main');
         if (!inLeague) state.teamId = '';
       }
 
+      // Reset sessions cache when the league changes
+      if (state._sessions && state._sessions.leagueId !== leagueId) {
+        state._sessions = null;
+        state.sessionDate = '';
+      }
+
       let html = `<h3 style="margin:18px 0 10px;color:var(--text)">${data.league_name} <span style="color:var(--muted);font-weight:400">${data.season}</span></h3>`;
 
       html += '<div class="pill-row">';
-      const sections = ['Scores', 'Standings', 'Leaders'];
+      const sections = ['Scores', 'Standings', 'Leaders', 'Sessions'];
       const active = localStorage.getItem('cahl-league-section') || 'Scores';
       sections.forEach(s => html += `<span class="pill ${s===active?'active':''}" data-sec="${s}">${s}</span>`);
       html += '</div>';
@@ -501,8 +511,15 @@ const $main = document.getElementById('main');
       html += '</tbody></table>';
       html += '</div>';
 
+      // Sessions: every game night of the season, pick one to view all scores
+      html += '<div id="leagueSecSessions" class="league-sec" style="display:'+(active==='Sessions'?'block':'none')+'">';
+      html += '<div class="empty">All game nights for the season…</div>';
+      html += '</div>';
+
       $content.innerHTML = html;
       animateNumbers($content);
+
+      if (active === 'Sessions') loadLeagueSessions(leagueId);
 
       $('.pill-row')?.addEventListener('click', e => {
         if (e.target.classList.contains('pill') && e.target.dataset.sec) {
@@ -510,8 +527,57 @@ const $main = document.getElementById('main');
           localStorage.setItem('cahl-league-section', sec);
           document.querySelectorAll('.pill[data-sec]').forEach(p => p.classList.toggle('active', p.dataset.sec === sec));
           document.querySelectorAll('.league-sec').forEach(s => s.style.display = s.id === 'leagueSec' + sec ? 'block' : 'none');
+          if (sec === 'Sessions') loadLeagueSessions(leagueId);
         }
       });
+    }
+
+    async function loadLeagueSessions(leagueId, force=false) {
+      const $sec = $('#leagueSecSessions');
+      if (!$sec) return;
+      if (state._sessions && state._sessions.leagueId === leagueId && !force) {
+        renderSessionsSection();
+        return;
+      }
+      $sec.innerHTML = skeletonHtml(3);
+      const data = await api(`/api/sessions/${leagueId}`, force);
+      if (data.error) { $sec.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      state._sessions = { leagueId, sessions: data.sessions, season: data.season };
+      if (!state.sessionDate) {
+        // Default to the most recent night with final scores, else the last night
+        const played = data.sessions.filter(s => s.games.some(g => g.played));
+        const fallback = played.length ? played[played.length - 1] : data.sessions[data.sessions.length - 1];
+        state.sessionDate = fallback ? fallback.date : '';
+      }
+      renderSessionsSection();
+    }
+
+    function renderSessionsSection() {
+      const $sec = $('#leagueSecSessions');
+      const pack = state._sessions;
+      if (!$sec || !pack) return;
+      const sessions = pack.sessions || [];
+      if (!sessions.length) { $sec.innerHTML = '<div class="empty">No games found.</div>'; return; }
+
+      const sel = sessions.some(s => s.date === state.sessionDate)
+        ? state.sessionDate
+        : sessions[sessions.length - 1].date;
+      state.sessionDate = sel;
+
+      // Date pills, most recent night first
+      let html = '<div class="picker-days session-dates">';
+      [...sessions].reverse().forEach(s => {
+        const finals = s.games.filter(g => g.played).length;
+        html += `<span class="pill date-pill ${s.date === sel ? 'active' : ''}" data-session="${s.date}">${s.date}<span class="pill-count">${finals}/${s.games.length}</span></span>`;
+      });
+      html += '</div>';
+
+      const cur = sessions.find(s => s.date === sel);
+      const finals = cur.games.filter(g => g.played).length;
+      html += `<div class="picker-hint">${cur.games.length} games · ${finals} final</div>`;
+      html += cur.games.map(g => gameHtml(g)).join('');
+      $sec.innerHTML = html;
+      animateNumbers($sec);
     }
 
     async function renderTeam(refresh) {
@@ -800,6 +866,14 @@ const $main = document.getElementById('main');
         const l = state.leagues.find(x => x.id === state.playersLeague);
         if (l) state.playersDay = leagueDay(l.name);
         await renderPlayers();
+        return;
+      }
+
+      // Sessions date pills
+      const sessEl = e.target.closest('[data-session]');
+      if (sessEl) {
+        state.sessionDate = sessEl.dataset.session;
+        renderSessionsSection();
         return;
       }
 
