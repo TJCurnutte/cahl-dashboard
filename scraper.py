@@ -591,7 +591,10 @@ def parse_team_schedule(team_id):
             rink = _text(cells[3])
 
             def _is_current_team(name):
-                return name == team_name_core or name == team_name or team_name_core in name or name in team_name_core
+                # Normalized exact match only — substring matching causes false positives
+                # (e.g. "Red" matching both "Red Wings" and "Red Sox")
+                norm = name.lower().strip().replace(" hockey", "")
+                return norm == team_name_core.lower() or name == team_name
 
             home_link = cells[4].find("a", href=True)
             away_link = cells[5].find("a", href=True)
@@ -775,6 +778,63 @@ def parse_all_teams(max_workers=8):
 
     # Sort alphabetically for stable UI
     return sorted(teams.values(), key=lambda t: t["name"].lower()), None
+
+
+def enrich_today_scores(home_data, max_workers=8):
+    """Fill scores for today's games by cross-referencing team schedules.
+
+    The homepage lists tonight's matchups without scores; each team's schedule
+    page has the final score once the game is played. We fetch the involved
+    teams' schedules in parallel and match games by date + both team IDs.
+    Games that haven't started yet are left without scores.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    games = home_data.get("today", [])
+    if not games:
+        return
+
+    today_label = datetime.now().strftime("%b %-d")  # e.g. "Aug 5"
+    now = datetime.now()
+
+    def game_started(g):
+        t = g.get("time", "")
+        m = re.match(r"(\d{1,2}):(\d{2})\s*(AM|PM)", t, re.IGNORECASE)
+        if not m:
+            return True  # unknown time — don't block scores
+        hh = int(m.group(1)) % 12
+        if m.group(3).upper() == "PM":
+            hh += 12
+        start = now.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
+        return now >= start
+
+    # Only fetch schedules for games that have actually started
+    started = [g for g in games if game_started(g)]
+    if not started:
+        return
+
+    team_ids = {tid for g in started for tid in (g.get("home_id"), g.get("away_id")) if tid}
+
+    schedules = {}
+
+    def fetch(tid):
+        sched, e = parse_team_schedule(tid)
+        if not e and sched:
+            schedules[tid] = sched
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(fetch, team_ids))
+
+    for g in started:
+        for tid in (g.get("home_id"), g.get("away_id")):
+            for s in schedules.get(tid, []):
+                if s["date"] != today_label or not s.get("played"):
+                    continue
+                if {s.get("home_id"), s.get("away_id")} == {g.get("home_id"), g.get("away_id")}:
+                    g["home_score"] = s["home_score"]
+                    g["away_score"] = s["away_score"]
+                    g["played"] = True
+                    break
 
 
 def parse_league_sessions(league_id, max_workers=8):

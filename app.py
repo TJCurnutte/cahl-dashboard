@@ -36,7 +36,14 @@ def index():
 @app.route("/api/today")
 def today():
     data, err = scraper.parse_homepage()
-    return _jsonify(data, err)
+    if err:
+        return jsonify({"error": err}), 502
+    # Fill in scores for tonight's games once they've started (uses cached schedules)
+    try:
+        scraper.enrich_today_scores(data)
+    except Exception:
+        pass  # scores are best-effort; schedule still renders
+    return jsonify(data)
 
 
 @app.route("/api/leaders")

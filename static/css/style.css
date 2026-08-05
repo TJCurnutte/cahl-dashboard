@@ -13,7 +13,7 @@
   --panel: rgba(255, 255, 255, 0.66);
   --panel-2: rgba(255, 255, 255, 0.85);
   --text: #0b1f3a;
-  --muted: #5c6f88;
+  --muted: #4a5d75;
   --accent: #ce1126;          /* Goal Red */
   --accent-2: #002654;        /* Union Blue */
   --danger: #ce1126;
@@ -484,6 +484,29 @@ select:focus, input:focus {
 
 .t-vs { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
 
+.t-score {
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: rgba(0, 38, 84, 0.07);
+  border: 1px solid var(--border);
+}
+
+.t-score.live-badge {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+html[data-theme="dark"] .t-score:not(.live-badge) { background: rgba(255, 255, 255, 0.08); }
+
 .t-rink {
   flex: 0 0 auto;
   color: var(--accent-2);
@@ -919,6 +942,89 @@ nav a.active, .nav-link.active {
 }
 
 /* ============================================================
+   Season calendar
+   ============================================================ */
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cal-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cal-dow {
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 0;
+}
+
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.cal-cell.has-games {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.cal-cell.has-games:hover { transform: scale(1.06); border-color: var(--accent); }
+
+.cal-cell.today .cal-num {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cal-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 3px;
+  min-height: 6px;
+}
+
+.cal-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-2);
+}
+
+.cal-dot.played { background: var(--accent-2); }
+.cal-dot.upcoming { background: transparent; border: 1.5px solid var(--muted); }
+.cal-dot.w { background: var(--win); }
+.cal-dot.l { background: var(--loss); }
+.cal-dot.t { background: var(--tie); }
+
+/* ============================================================
    Desktop / web-browser layout
    ============================================================ */
 
@@ -966,11 +1072,18 @@ nav a.active, .nav-link.active {
 
   nav a svg, .nav-link svg { width: 17px; height: 17px; }
 
+  nav a:hover, .nav-link:hover { background: rgba(0, 38, 84, 0.08); color: var(--accent-2); }
+
   nav a.active, .nav-link.active {
     background: var(--accent);
     color: #fff;
     box-shadow: 0 4px 12px rgba(206, 17, 38, 0.25);
   }
+
+  nav a.active:hover, .nav-link.active:hover { background: var(--accent); color: #fff; }
+
+  /* Real tables on desktop instead of the mobile scroll pattern */
+  table { display: table; overflow-x: visible; }
 
   main { padding: 30px 36px 40px; }
 
@@ -997,6 +1110,164 @@ nav a.active, .nav-link.active {
 }
 
 /* ============================================================
+   Hero card (My Team on Today), team head, toast, a11y helpers
+   ============================================================ */
+
+.hero-card {
+  border-left: 3px solid var(--accent);
+}
+
+.hero-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hero-cta-text { font-size: 13px; color: var(--muted); }
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.hero-team { font-size: 17px; font-weight: 800; color: var(--text); }
+
+.hero-record {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--border);
+}
+
+.hero-rank {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.hero-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--text);
+  padding: 3px 0;
+  min-width: 0;
+}
+
+.hero-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  width: 34px;
+  flex: 0 0 auto;
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.team-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  color: var(--accent-2);
+  background: transparent;
+  transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.btn-link:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%) translateY(12px);
+  z-index: 95;
+  background: var(--navy-glass);
+  -webkit-backdrop-filter: var(--blur-strong);
+  backdrop-filter: var(--blur-strong);
+  color: var(--on-navy);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lift);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  max-width: calc(100vw - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (min-width: 900px) {
+  .toast { bottom: 24px; }
+}
+
+/* Screen-reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Visible focus for interactive elements (WCAG 2.4.7) */
+.pill:focus-visible,
+.cal-cell.has-games:focus-visible,
+.nav-link:focus-visible,
+.btn-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cal-nav-right { display: flex; gap: 6px; }
+
+/* ============================================================
    Dark mode — CBJ night variant (toggle in header)
    ============================================================ */
 
@@ -1005,7 +1276,7 @@ html[data-theme="dark"] {
   --panel: rgba(17, 32, 56, 0.60);
   --panel-2: rgba(23, 40, 68, 0.80);
   --text: #eaf1fb;
-  --muted: #93a5c0;
+  --muted: #b8c8dc;
   --accent: #e6394f;
   --accent-2: #a9c6f5;
   --danger: #ff5d6c;

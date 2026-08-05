@@ -24,10 +24,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="icon" type="image/png" href="/static/img/chiller-logo.png" />
   <link rel="apple-touch-icon" href="/static/img/chiller-logo-300.png" />
-  <link rel="stylesheet" href="/static/css/style.css?v=11" />
+  <link rel="stylesheet" href="/static/css/style.css?v=12" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
+  <div id="a11y-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" class="toast" role="status"></div>
 
   <div id="app">
     <header role="banner">
@@ -47,7 +49,7 @@
           <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         </button>
-        <button id="refreshBtn" class="ghost small" title="Refresh latest scores and stats">Refresh</button>
+        <button id="refreshBtn" class="ghost small" title="Refresh latest scores and stats" aria-label="Refresh latest scores and stats">Refresh</button>
         <label class="switch" title="Toggle live auto-refresh">
           <input type="checkbox" id="autoToggle" aria-label="Toggle live auto-refresh" />
           <span class="toggle"></span>
@@ -56,7 +58,7 @@
       </div>
     </header>
 
-    <main id="main" role="main" aria-live="polite" tabindex="-1"></main>
+    <main id="main" role="main" tabindex="-1"></main>
 
     <nav role="navigation" aria-label="Primary">
       <a href="#" class="nav-link active" data-tab="today" aria-label="Today's games" aria-current="page">
@@ -82,6 +84,6 @@
     </nav>
   </div>
 
-  <script src="/static/js/app.js?v=11"></script>
+  <script src="/static/js/app.js?v=12"></script>
 </body>
 </html>

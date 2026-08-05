@@ -17,6 +17,8 @@ const $main = document.getElementById('main');
       playersDay: '',
       _sessions: null,
       sessionDate: '',
+      calMonth: '',
+      calDay: '',
       leaders: null,
       cache: {}
     };
@@ -26,6 +28,13 @@ const $main = document.getElementById('main');
 
     function $(sel){ return document.querySelector(sel); }
     function fmtTime(t){ return t || 'TBD'; }
+
+    // Escape scraped text (team/player names come from chillerstats.com) before HTML injection
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
 
     // Desktop vs mobile context: body.is-desktop mirrors the 900px CSS breakpoint
     const desktopMQ = window.matchMedia('(min-width: 900px)');
@@ -64,8 +73,7 @@ const $main = document.getElementById('main');
 
     function shortLeagueName(name) {
       let s = (name || '').trim();
-      s = s.replace(/^NTPRD Chiller\s+/i, '');
-      s = s.replace(/^(Sunday|Monday|Tuesday|Tue|Wednesday|Thursday|Thur|Friday)\s*-?\s*/i, '');
+      s = s.replace(/^(?:NTPRD Chiller\s+)?(Sunday|Monday|Tuesday|Tue|Wednesday|Thursday|Thur|Friday)\s*-?\s*/i, '');
       s = s.replace(/^NTPRD Chiller\s+/i, '');
       s = s.replace(/\s*-?\s*league\s*$/i, '');
       s = s.replace(/^-\s*/, '').trim();
@@ -94,13 +102,13 @@ const $main = document.getElementById('main');
       let html = '<div class="picker-days">';
       DAY_ORDER.forEach(d => {
         if (!groups[d].length) return;
-        html += `<span class="pill day-pill ${d === day ? 'active' : ''}" data-day="${d}">${d}<span class="pill-count">${groups[d].length}</span></span>`;
+        html += `<span class="pill day-pill ${d === day ? 'active' : ''}" data-day="${d}" tabindex="0" role="button">${d}<span class="pill-count">${groups[d].length}</span></span>`;
       });
       html += '</div>';
       if (day && groups[day].length) {
         html += '<div class="picker-leagues">';
         groups[day].forEach(l => {
-          html += `<span class="pill league-pill ${l.id === state.leagueId ? 'active' : ''}" data-lid="${l.id}">${shortLeagueName(l.name)}</span>`;
+          html += `<span class="pill league-pill ${l.id === state.leagueId ? 'active' : ''}" data-lid="${l.id}" tabindex="0" role="button">${esc(shortLeagueName(l.name))}</span>`;
         });
         html += '</div>';
       }
@@ -136,16 +144,16 @@ const $main = document.getElementById('main');
       const groups = leagueGroups();
       const activeDay = state.playersDay || (state.playersLeague ? leagueDay(currentPlayersLeagueName()) : '');
       let html = '<div class="picker-days">';
-      html += `<span class="pill day-pill ${!state.playersLeague ? 'active' : ''}" data-pl-all="1">All CAHL</span>`;
+      html += `<span class="pill day-pill ${!state.playersLeague ? 'active' : ''}" data-pl-all="1" tabindex="0" role="button">All CAHL</span>`;
       DAY_ORDER.forEach(d => {
         if (!groups[d].length) return;
-        html += `<span class="pill day-pill ${d === activeDay && state.playersLeague ? 'active' : ''}" data-pl-day="${d}">${d}<span class="pill-count">${groups[d].length}</span></span>`;
+        html += `<span class="pill day-pill ${d === activeDay && state.playersLeague ? 'active' : ''}" data-pl-day="${d}" tabindex="0" role="button">${d}<span class="pill-count">${groups[d].length}</span></span>`;
       });
       html += '</div>';
       if (activeDay && groups[activeDay] && groups[activeDay].length) {
         html += '<div class="picker-leagues">';
         groups[activeDay].forEach(l => {
-          html += `<span class="pill league-pill ${l.id === state.playersLeague ? 'active' : ''}" data-pl-lid="${l.id}">${shortLeagueName(l.name)}</span>`;
+          html += `<span class="pill league-pill ${l.id === state.playersLeague ? 'active' : ''}" data-pl-lid="${l.id}" tabindex="0" role="button">${esc(shortLeagueName(l.name))}</span>`;
         });
         html += '</div>';
       }
@@ -160,7 +168,7 @@ const $main = document.getElementById('main');
     function leaderSection(title, list, valKey) {
       if (!list || !list.length) return '';
       const rows = list.map(p =>
-        `<tr class="link" onclick="selectPlayer('${p.team_id || ''}','${p.player_id || ''}')"><td class="num">${p.rank || ''}</td><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
+        `<tr class="link" onclick="selectPlayer('${p.team_id || ''}','${p.player_id || ''}')"><td class="num">${p.rank || ''}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
       ).join('');
       return `<h3 style="margin-top:16px">${title}</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">${title}</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
@@ -220,7 +228,7 @@ const $main = document.getElementById('main');
           box.innerHTML = '<div class="typeahead-item muted">No teams match</div>';
         } else {
           box.innerHTML = matches.map(t =>
-            `<div class="typeahead-item" data-tid="${t.id}" data-lid="${t.league_id}"><span class="ta-name">${t.name}</span><span class="ta-league">${t.league_name}</span></div>`
+            `<div class="typeahead-item" data-tid="${t.id}" data-lid="${t.league_id}"><span class="ta-name">${esc(t.name)}</span><span class="ta-league">${esc(t.league_name)}</span></div>`
           ).join('');
         }
         box.style.display = 'block';
@@ -374,6 +382,8 @@ const $main = document.getElementById('main');
       await loadActiveTab(true);
       $refresh.innerHTML = 'Refresh';
       $refresh.disabled = false;
+      const t = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      showToast(`Updated ${t}`);
     }
 
     function setTab(tab) {
@@ -421,13 +431,13 @@ const $main = document.getElementById('main');
       return `
         <div class="game-card" data-game='${JSON.stringify({homeId, awayId}).replace(/'/g, "&#39;")}'>
           <div class="meta">
-            <span>${g.date || 'Today'} ${fmtTime(g.time)} ${g.facility ? '· ' + g.facility : ''}</span>
+            <span>${esc(g.date || 'Today')} ${fmtTime(g.time)} ${g.facility ? '· ' + esc(g.facility) : ''}</span>
             ${(played || (g.home_score !== undefined && g.home_score !== null)) ? '<span class="score">' + score + '</span>' : (live ? '<span class="live">Live</span>' : '')}
           </div>
           <div class="matchup">
-            <div class="team link" data-team="${homeId || ''}" onclick="selectTeam('${homeId || ''}')">${home}</div>
+            <div class="team link" data-team="${homeId || ''}" onclick="selectTeam('${homeId || ''}')">${esc(home)}</div>
             <span class="vs">vs</span>
-            <div class="team link" data-team="${awayId || ''}" onclick="selectTeam('${awayId || ''}')">${away}</div>
+            <div class="team link" data-team="${awayId || ''}" onclick="selectTeam('${awayId || ''}')">${esc(away)}</div>
           </div>
         </div>
       `;
@@ -435,10 +445,32 @@ const $main = document.getElementById('main');
 
     function todayRowHtml(g) {
       const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
+      // A 0-0 line is the site's default for unplayed games, so it doesn't count as a score
+      const hasScore = g.played && (g.home_score || g.away_score);
+
+      // Game started but no final posted yet -> treat as live (within a 3h window)
+      let live = false;
+      if (!hasScore && g.time) {
+        const m = g.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (m) {
+          let hh = parseInt(m[1], 10) % 12;
+          if (m[3].toUpperCase() === 'PM') hh += 12;
+          const start = new Date();
+          start.setHours(hh, parseInt(m[2], 10), 0, 0);
+          const now = new Date();
+          live = now >= start && now < new Date(start.getTime() + 3 * 60 * 60 * 1000);
+        }
+      }
+
+      const scoreHtml = hasScore
+        ? `<span class="t-score">${g.home_score}\u2013${g.away_score}</span>`
+        : (live ? '<span class="t-score live-badge">LIVE</span>' : '');
+
       return `<div class="today-row">
         <span class="t-time">${fmtTime(g.time)}</span>
-        <span class="t-match"><span class="link" onclick="selectTeam('${g.home_id || ''}')">${g.home}</span><span class="t-vs">vs</span><span class="link" onclick="selectTeam('${g.away_id || ''}')">${g.away}</span></span>
-        <span class="t-rink">${rink}</span>
+        <span class="t-match"><span class="link" onclick="selectTeam('${g.home_id || ''}')">${esc(g.home)}</span><span class="t-vs">vs</span><span class="link" onclick="selectTeam('${g.away_id || ''}')">${esc(g.away)}</span></span>
+        ${scoreHtml}
+        <span class="t-rink">${esc(rink)}</span>
       </div>`;
     }
 
@@ -447,7 +479,15 @@ const $main = document.getElementById('main');
       if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
       state.leagues = data.leagues;
 
-      let html = '<div class="card today-card"><h2>Today\'s Games</h2>';
+      let html = '';
+      if (state.teamId) {
+        html += '<div class="card hero-card" id="myTeamHero"><div class="empty">Loading your team\u2026</div></div>';
+      } else {
+        html += '<div class="card hero-card hero-cta"><div class="hero-cta-text">Set your team to see next game, last result, and record here</div>'
+          + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
+      }
+
+      html += '<div class="card today-card"><h2>Today\'s Games</h2>';
       if (!data.today.length) {
         html += '<div class="empty">No games posted yet.</div>';
       } else {
@@ -458,6 +498,39 @@ const $main = document.getElementById('main');
       html += '<div class="card"><h3>Leagues</h3>' + pickerHtml() +
         '<div class="picker-hint">Pick a day, then a league</div></div>';
       setMainHtml(html);
+
+      if (state.teamId) loadMyTeamHero(state.teamId, refresh);
+    }
+
+    async function loadMyTeamHero(teamId, refresh=false) {
+      const el = document.getElementById('myTeamHero');
+      if (!el) return;
+      const data = await api(`/api/team/${teamId}`, refresh);
+      if (data.error) { el.remove(); return; }
+
+      const over = data.overview, form = data.form || {};
+      const standings = data.standings || [];
+      const rank = standings.findIndex(s => s.team_id === teamId) + 1;
+      const total = standings.length;
+
+      let inner = `<div class="hero-top"><span class="hero-team link" onclick="setTab('team')">${esc(over.team_name)}</span>`;
+      if (form.played) inner += `<span class="hero-record">${form.record}${form.streak ? ' · ' + form.streak : ''}</span>`;
+      if (rank) inner += `<span class="hero-rank">${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'} of ${total}</span>`;
+      inner += '</div>';
+
+      if (over.recent_result) {
+        const r = over.recent_result;
+        const isHome = r.home_id === teamId;
+        const us = isHome ? r.home_final : r.away_final;
+        const them = isHome ? r.away_final : r.home_final;
+        const res = us > them ? 'w' : (us < them ? 'l' : 't');
+        inner += `<div class="hero-line"><span class="hero-label">Last</span><span class="form-chip ${res}">${res.toUpperCase()}</span> <b>${us}\u2013${them}</b> ${isHome ? 'vs' : '@'} ${esc(isHome ? r.away : r.home)}</div>`;
+      }
+      if (over.next_game) {
+        const ng = over.next_game;
+        inner += `<div class="hero-line"><span class="hero-label">Next</span> <b>${esc(ng.date || 'TBD')}</b> ${fmtTime(ng.time)} \u00b7 ${esc(ng.facility || 'TBD')} \u00b7 ${ng.home_away === 'Home' ? 'vs' : '@'} ${esc(ng.opponent)}</div>`;
+      }
+      el.innerHTML = inner;
     }
 
     async function renderLeague(refresh) {
@@ -496,9 +569,15 @@ const $main = document.getElementById('main');
       let html = `<h3 style="margin:18px 0 10px;color:var(--text)">${data.league_name} <span style="color:var(--muted);font-weight:400">${data.season}</span></h3>`;
 
       html += '<div class="pill-row">';
-      const sections = ['Scores', 'Standings', 'Leaders', 'Sessions'];
+      const sections = [
+        { key: 'Scores', label: 'Scores' },
+        { key: 'Standings', label: 'Standings' },
+        { key: 'Leaders', label: 'Leaders' },
+        { key: 'Sessions', label: 'Game Nights' },
+        { key: 'Calendar', label: 'Calendar' },
+      ];
       const active = localStorage.getItem('cahl-league-section') || 'Scores';
-      sections.forEach(s => html += `<span class="pill ${s===active?'active':''}" data-sec="${s}">${s}</span>`);
+      sections.forEach(s => html += `<span class="pill ${s.key===active?'active':''}" data-sec="${s.key}" tabindex="0" role="button">${s.label}</span>`);
       html += '</div>';
 
       html += '<div id="leagueSecScores" class="league-sec" style="display:'+(active==='Scores'?'block':'none')+'">';
@@ -537,10 +616,16 @@ const $main = document.getElementById('main');
       html += '<div class="empty">All game nights for the season…</div>';
       html += '</div>';
 
+      // Calendar: month grid of game nights with result markers
+      html += '<div id="leagueSecCalendar" class="league-sec" style="display:'+(active==='Calendar'?'block':'none')+'">';
+      html += '<div class="empty">Season calendar…</div>';
+      html += '</div>';
+
       $content.innerHTML = html;
       animateNumbers($content);
 
       if (active === 'Sessions') loadLeagueSessions(leagueId);
+      if (active === 'Calendar') loadLeagueCalendar(leagueId);
 
       $('.pill-row')?.addEventListener('click', e => {
         if (e.target.classList.contains('pill') && e.target.dataset.sec) {
@@ -549,8 +634,17 @@ const $main = document.getElementById('main');
           document.querySelectorAll('.pill[data-sec]').forEach(p => p.classList.toggle('active', p.dataset.sec === sec));
           document.querySelectorAll('.league-sec').forEach(s => s.style.display = s.id === 'leagueSec' + sec ? 'block' : 'none');
           if (sec === 'Sessions') loadLeagueSessions(leagueId);
+          if (sec === 'Calendar') loadLeagueCalendar(leagueId);
         }
       });
+    }
+
+    async function ensureSessions(leagueId, force=false) {
+      if (state._sessions && state._sessions.leagueId === leagueId && !force) return state._sessions;
+      const data = await api(`/api/sessions/${leagueId}`, force);
+      if (data.error) throw new Error(data.error);
+      state._sessions = { leagueId, sessions: data.sessions, season: data.season };
+      return state._sessions;
     }
 
     async function loadLeagueSessions(leagueId, force=false) {
@@ -561,16 +655,18 @@ const $main = document.getElementById('main');
         return;
       }
       $sec.innerHTML = skeletonHtml(3);
-      const data = await api(`/api/sessions/${leagueId}`, force);
-      if (data.error) { $sec.innerHTML = `<div class="error">${data.error}</div>`; return; }
-      state._sessions = { leagueId, sessions: data.sessions, season: data.season };
-      if (!state.sessionDate) {
-        // Default to the most recent night with final scores, else the last night
-        const played = data.sessions.filter(s => s.games.some(g => g.played));
-        const fallback = played.length ? played[played.length - 1] : data.sessions[data.sessions.length - 1];
-        state.sessionDate = fallback ? fallback.date : '';
+      try {
+        const pack = await ensureSessions(leagueId, force);
+        if (!state.sessionDate) {
+          // Default to the most recent night with final scores, else the last night
+          const played = pack.sessions.filter(s => s.games.some(g => g.played));
+          const fallback = played.length ? played[played.length - 1] : pack.sessions[pack.sessions.length - 1];
+          state.sessionDate = fallback ? fallback.date : '';
+        }
+        renderSessionsSection();
+      } catch (e) {
+        $sec.innerHTML = `<div class="error">${e.message}</div>`;
       }
-      renderSessionsSection();
     }
 
     function renderSessionsSection() {
@@ -589,7 +685,7 @@ const $main = document.getElementById('main');
       let html = '<div class="picker-days session-dates">';
       [...sessions].reverse().forEach(s => {
         const finals = s.games.filter(g => g.played).length;
-        html += `<span class="pill date-pill ${s.date === sel ? 'active' : ''}" data-session="${s.date}">${s.date}<span class="pill-count">${finals}/${s.games.length}</span></span>`;
+        html += `<span class="pill date-pill ${s.date === sel ? 'active' : ''}" data-session="${s.date}" tabindex="0" role="button">${esc(s.date)}<span class="pill-count">${finals}/${s.games.length}</span></span>`;
       });
       html += '</div>';
 
@@ -597,6 +693,114 @@ const $main = document.getElementById('main');
       const finals = cur.games.filter(g => g.played).length;
       html += `<div class="picker-hint">${cur.games.length} games · ${finals} final</div>`;
       html += '<div class="games-grid">' + cur.games.map(g => gameHtml(g)).join('') + '</div>';
+      $sec.innerHTML = html;
+      animateNumbers($sec);
+    }
+
+    // ---- Season calendar (month grid over the sessions data) ----
+    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    function parseGameDate(d) {
+      // "May 13" -> Date; infer the year, roll back if it lands far in the future
+      const now = new Date();
+      let dt = new Date(`${d} ${now.getFullYear()}`);
+      if (isNaN(dt)) return null;
+      if ((dt - now) / 86400000 > 200) dt = new Date(`${d} ${now.getFullYear() - 1}`);
+      return dt;
+    }
+
+    function dateKey(dt) {
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }
+
+    async function loadLeagueCalendar(leagueId, force=false) {
+      const $sec = $('#leagueSecCalendar');
+      if (!$sec) return;
+      $sec.innerHTML = skeletonHtml(3);
+      try {
+        await ensureSessions(leagueId, force);
+        if (!state.calMonth) {
+          // Default to the month containing the most recent played night, else current month
+          const played = state._sessions.sessions.filter(s => s.games.some(g => g.played));
+          const ref = played.length ? played[played.length - 1] : state._sessions.sessions[state._sessions.sessions.length - 1];
+          const dt = ref ? parseGameDate(ref.date) : null;
+          const base = dt || new Date();
+          state.calMonth = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+        }
+        renderCalendarSection();
+      } catch (e) {
+        $sec.innerHTML = `<div class="error">${e.message}</div>`;
+      }
+    }
+
+    function renderCalendarSection() {
+      const $sec = $('#leagueSecCalendar');
+      const pack = state._sessions;
+      if (!$sec || !pack) return;
+
+      // Map dateKey -> { dateLabel, games }
+      const byDay = {};
+      pack.sessions.forEach(s => {
+        const dt = parseGameDate(s.date);
+        if (dt) byDay[dateKey(dt)] = s;
+      });
+
+      const [yy, mm] = state.calMonth.split('-').map(Number);
+      const first = new Date(yy, mm - 1, 1);
+      const daysInMonth = new Date(yy, mm, 0).getDate();
+      const startDow = first.getDay(); // 0 = Sunday
+      const todayKey = dateKey(new Date());
+
+      let html = '<div class="cal-nav">'
+        + '<button class="ghost small" data-cal-prev aria-label="Previous month">\u2039</button>'
+        + `<span class="cal-title">${MONTH_NAMES[mm - 1]} ${yy}</span>`
+        + '<span class="cal-nav-right">'
+        + '<button class="ghost small" data-cal-today>Today</button>'
+        + '<button class="ghost small" data-cal-next aria-label="Next month">\u203a</button>'
+        + '</span>'
+        + '</div>';
+
+      html += '<div class="cal-grid">';
+      ['S','M','T','W','T','F','S'].forEach(d => { html += `<span class="cal-dow">${d}</span>`; });
+      for (let i = 0; i < startDow; i++) html += '<span class="cal-cell empty-cell"></span>';
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = `${yy}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const sess = byDay[key];
+        let cellClass = 'cal-cell';
+        if (key === todayKey) cellClass += ' today';
+        let dots = '';
+        if (sess) {
+          cellClass += ' has-games';
+          dots = '<span class="cal-dots">' + sess.games.map(g => {
+            let cls = 'cal-dot';
+            if (g.played && state.teamId && (g.home_id === state.teamId || g.away_id === state.teamId)) {
+              const us = g.home_id === state.teamId ? g.home_score : g.away_score;
+              const them = g.home_id === state.teamId ? g.away_score : g.home_score;
+              cls += us > them ? ' w' : (us < them ? ' l' : ' t');
+            } else if (g.played) {
+              cls += ' played';
+            } else {
+              cls += ' upcoming';
+            }
+            return `<span class="${cls}"></span>`;
+          }).join('') + '</span>';
+        }
+        html += `<span class="${cellClass}" ${sess ? `data-cal-day="${key}" tabindex="0" role="button" aria-label="${sess.date}: ${sess.games.length} games"` : ''}><span class="cal-num">${day}</span>${dots}</span>`;
+      }
+      html += '</div>';
+
+      // Selected day's games
+      const selKey = state.calDay && byDay[state.calDay] ? state.calDay : null;
+      if (selKey) {
+        const sess = byDay[selKey];
+        const finals = sess.games.filter(g => g.played).length;
+        html += `<div class="picker-hint" style="margin-top:12px">${sess.date} \u00b7 ${sess.games.length} games \u00b7 ${finals} final</div>`;
+        html += '<div class="games-grid" style="margin-top:8px">' + sess.games.map(g => gameHtml(g)).join('') + '</div>';
+      } else {
+        html += '<div class="picker-hint" style="margin-top:12px">Tap a day with dots to see that night\u2019s scores. Dots are green/red for your team\u2019s W/L when a team is selected.</div>';
+      }
+
       $sec.innerHTML = html;
       animateNumbers($sec);
     }
@@ -649,7 +853,19 @@ const $main = document.getElementById('main');
       if (data.error) { $content.innerHTML = `<div class="error">${data.error}</div>`; return; }
 
       const over = data.overview;
-      let html = `<h3 style="color:var(--text);margin-bottom:12px">${over.team_name}</h3>`;
+      const standings = data.standings || [];
+      const rank = standings.findIndex(s => s.team_id === teamId) + 1;
+      const rankSuffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
+      const icalUrl = `https://www.chillerstats.com/team/calendar_export.cfm?TeamID=${teamId}`;
+
+      let html = `<div class="team-head">
+        <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
+        <div class="team-head-actions">
+          ${rank ? `<span class="hero-rank">${rank}${rankSuffix} of ${standings.length}</span>` : ''}
+          <a class="ghost small btn-link" href="${icalUrl}" target="_blank" rel="noopener" title="Subscribe to this team's schedule in your calendar">iCal</a>
+          <button class="ghost small" onclick="shareTeamResult('${teamId}')" title="Copy last result to share">Share</button>
+        </div>
+      </div>`;
 
       // Season record / historical wins (derived from full schedule)
       const form = data.form || {};
@@ -669,19 +885,19 @@ const $main = document.getElementById('main');
 
         html += '<div class="form-chips-label">Season Timeline</div><div class="timeline">' +
           (form.timeline || []).map(t =>
-            `<span class="tl-game ${t.result.toLowerCase()}" title="${t.date} ${t.location === 'H' ? 'vs' : '@'} ${t.opponent} (${t.score})">${t.result}</span>`
+            `<span class="tl-game ${t.result.toLowerCase()}" title="${esc(t.date)} ${t.location === 'H' ? 'vs' : '@'} ${esc(t.opponent)} (${t.score})">${t.result}</span>`
           ).join('') +
           '</div>';
       }
 
       if (over.next_game) {
         const ng = over.next_game;
-        html += `<div class="game-card"><div class="meta">Next Game ${ng.home_away}</div><div class="matchup"><div class="team">${over.team_name}</div><span class="vs">vs</span><div class="team">${ng.opponent}</div></div><div class="meta">${ng.date || 'TBD'} · ${fmtTime(ng.time)} · ${ng.facility || 'TBD'}</div></div>`;
+        html += `<div class="game-card"><div class="meta">Next Game ${ng.home_away}</div><div class="matchup"><div class="team">${esc(over.team_name)}</div><span class="vs">vs</span><div class="team">${esc(ng.opponent)}</div></div><div class="meta">${esc(ng.date || 'TBD')} · ${fmtTime(ng.time)} · ${esc(ng.facility || 'TBD')}</div></div>`;
       }
 
       if (over.recent_result) {
         const r = over.recent_result;
-        html += `<div class="game-card"><div class="meta">Recent Result</div><div class="matchup"><div class="team">${r.home}</div><span class="score">${r.home_final}-${r.away_final}</span><div class="team">${r.away}</div></div></div>`;
+        html += `<div class="game-card"><div class="meta">Recent Result</div><div class="matchup"><div class="team">${esc(r.home)}</div><span class="score">${r.home_final}-${r.away_final}</span><div class="team">${esc(r.away)}</div></div></div>`;
       }
 
       html += '<h3 style="margin-top:18px">Team Leaders</h3><div class="stat-grid">';
@@ -689,7 +905,7 @@ const $main = document.getElementById('main');
       const leaderLabels = {points:'Points', goals:'Goals', assists:'Assists', pim:'PIM'};
       leaderKeys.forEach(k => {
         const top = over.team_leaders[k][0];
-        html += `<div class="stat-box"><div class="num">${top ? (top.points || top.goals || top.assists || top.pim || 0) : '-'}</div><div class="label">${leaderLabels[k]} ${top ? '· ' + top.name : ''}</div></div>`;
+        html += `<div class="stat-box"><div class="num">${top ? (top.points || top.goals || top.assists || top.pim || 0) : '-'}</div><div class="label">${leaderLabels[k]} ${top ? '· ' + esc(top.name) : ''}</div></div>`;
       });
       html += '</div>';
 
@@ -697,27 +913,28 @@ const $main = document.getElementById('main');
       html += '<table><thead><tr><th>Team</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">PTS</th><th class="num">GF</th><th class="num">GA</th></tr></thead><tbody>';
       html += data.standings.map(s => `
         <tr ${s.team_id === teamId ? 'style="color:var(--accent);font-weight:700"' : ''}>
-          <td>${s.team}</td><td class="num">${s.gp}</td><td class="num">${s.w}</td><td class="num">${s.l}</td><td class="num">${s.otl}</td>
+          <td>${esc(s.team)}</td><td class="num">${s.gp}</td><td class="num">${s.w}</td><td class="num">${s.l}</td><td class="num">${s.otl}</td>
           <td class="num">${s.pts}</td><td class="num">${s.gf}</td><td class="num">${s.ga}</td>
         </tr>`).join('');
       html += '</tbody></table>';
 
       html += '<h3 style="margin-top:18px">Schedule</h3>';
-      html += '<table><thead><tr><th>Date</th><th>Time</th><th>Facility</th><th>Opponent</th><th class="num">Score</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>Date</th><th>Time</th><th>Facility</th><th>Opponent</th><th class="num">Score</th><th class="num">Sheet</th></tr></thead><tbody>';
       html += data.schedule.map(g => {
         const isHome = g.home_id === teamId;
         const opp = isHome ? g.away : g.home;
         const oppId = isHome ? g.away_id : g.home_id;
         const score = g.played ? `${g.home_score}-${g.away_score}` : '';
-        return `<tr><td>${g.date}</td><td>${fmtTime(g.time)}</td><td>${g.facility}</td><td class="link" onclick="selectTeam('${oppId || ''}')">${isHome ? 'vs ' : '@ '}${opp}</td><td class="num">${score}</td></tr>`;
+        const sheet = g.score_sheet ? `<a class="link" href="${g.score_sheet}" target="_blank" rel="noopener" title="View official score sheet">\u2197</a>` : '';
+        return `<tr><td>${esc(g.date)}</td><td>${fmtTime(g.time)}</td><td>${esc(g.facility)}</td><td class="link" onclick="selectTeam('${oppId || ''}')">${isHome ? 'vs ' : '@ '}${esc(opp)}</td><td class="num">${score}</td><td class="num">${sheet}</td></tr>`;
       }).join('');
       html += '</tbody></table>';
 
       html += '<h3 style="margin-top:18px">Player Stats</h3>';
-      html += '<table><thead><tr><th>#</th><th>Player</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">PIM</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>#</th><th>Player</th><th>Pos</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">PIM</th></tr></thead><tbody>';
       html += data.stats.sort((a,b) => b.pts - a.pts).map(p => `
         <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
-          <td>${p.jersey || '-'}</td><td><span class="link">${p.name}</span></td>
+          <td>${p.jersey || '-'}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
           <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td><td class="num">${p.pim}</td>
         </tr>`).join('');
       html += '</tbody></table>';
@@ -787,7 +1004,9 @@ const $main = document.getElementById('main');
         <tr><td>${h.season}</td><td>${h.league}</td><td>${h.team}</td>
         <td class="num">${h.gp}</td><td class="num">${h.g}</td><td class="num">${h.a}</td><td class="num">${h.pts}</td><td class="num">${h.pim}</td></tr>`).join('');
       html += '</tbody></table></div>';
-      html += '<button class="ghost" onclick="setTab(\'players\')">Back to Leaders</button>';
+      const backTab = state.profileReturn || 'players';
+      const backLabels = { today: 'Today', league: 'League', team: 'Team', players: 'Leaders', analytics: 'Analytics' };
+      html += `<button class="ghost" onclick="setTab('${backTab}')">\u2190 Back to ${backLabels[backTab] || 'Leaders'}</button>`;
       setMainHtml(html);
     }
 
@@ -840,6 +1059,26 @@ const $main = document.getElementById('main');
       setMainHtml(html);
     }
 
+    // Toast + screen-reader announcements
+    function announce(message) {
+      const announcer = document.getElementById('a11y-announcer');
+      if (announcer) {
+        announcer.textContent = message;
+        setTimeout(() => { announcer.textContent = ''; }, 1000);
+      }
+    }
+
+    let toastTimer = null;
+    function showToast(message) {
+      let toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.add('show');
+      announce(message);
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
     // Public helpers for inline event handlers
     window.setTab = setTab;
     window.selectTeam = (teamId) => {
@@ -850,12 +1089,34 @@ const $main = document.getElementById('main');
     };
     window.selectPlayer = (teamId, playerId) => {
       if (!teamId || !playerId) return;
+      state.profileReturn = state.tab;
       renderPlayerProfile(teamId, playerId);
     };
 
     window.selectPlayerToken = (token) => {
       if (!token) return;
+      state.profileReturn = state.tab;
       renderPlayerProfile(null, null, token);
+    };
+
+    // Share the selected team's last result to the clipboard
+    window.shareTeamResult = async (teamId) => {
+      const data = await api(`/api/team/${teamId}`);
+      if (data.error) { showToast('Could not load team'); return; }
+      const over = data.overview, r = over.recent_result, form = data.form || {};
+      if (!r) { showToast('No recent result to share'); return; }
+      const isHome = r.home_id === teamId;
+      const us = isHome ? r.home_final : r.away_final;
+      const them = isHome ? r.away_final : r.home_final;
+      const res = us > them ? 'W' : (us < them ? 'L' : 'T');
+      const text = `${over.team_name} ${res} ${us}\u2013${them} ${isHome ? 'vs' : '@'} ${isHome ? r.away : r.home}` +
+        (form.played ? ` \u00b7 Season: ${form.record}` : '');
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('Result copied \u2014 paste it anywhere');
+      } catch (e) {
+        showToast(text);
+      }
     };
 
     // Navigation
@@ -869,6 +1130,16 @@ const $main = document.getElementById('main');
       e.preventDefault();
       setTab('today');
       $main.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // Keyboard operability for pill/cell controls (Enter/Space activates)
+    $main.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const target = e.target.closest('[data-day], [data-lid], [data-sec], [data-session], [data-cal-day], [data-pl-all], [data-pl-day], [data-pl-lid], [data-change-league], [data-cal-today], [data-cal-prev], [data-cal-next]');
+      if (target) {
+        e.preventDefault();
+        target.click();
+      }
     });
 
     // Delegated league-picker + change-league clicks
@@ -902,6 +1173,32 @@ const $main = document.getElementById('main');
       if (sessEl) {
         state.sessionDate = sessEl.dataset.session;
         renderSessionsSection();
+        return;
+      }
+
+      // Calendar controls
+      const calToday = e.target.closest('[data-cal-today]');
+      if (calToday) {
+        const now = new Date();
+        state.calMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        state.calDay = dateKey(now);
+        renderCalendarSection();
+        return;
+      }
+      const calPrev = e.target.closest('[data-cal-prev]');
+      const calNext = e.target.closest('[data-cal-next]');
+      if (calPrev || calNext) {
+        const [yy, mm] = state.calMonth.split('-').map(Number);
+        const dt = new Date(yy, mm - 1 + (calNext ? 1 : -1), 1);
+        state.calMonth = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        state.calDay = '';
+        renderCalendarSection();
+        return;
+      }
+      const calDay = e.target.closest('[data-cal-day]');
+      if (calDay) {
+        state.calDay = calDay.dataset.calDay;
+        renderCalendarSection();
         return;
       }
 
