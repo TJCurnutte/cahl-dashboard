@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 29;
+const JS_VERSION = 30;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -41,6 +41,9 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       allPlayersLoading: false,
       playersError: false,
       board: { level: 'all', sortKey: 'pts', sortDir: 'desc', showAll: false },
+      rosterSort: { key: 'pts', dir: 'desc' },
+      goalieSort: { key: 'gp', dir: 'desc' },
+      standingsSort: { key: 'pts', dir: 'desc' },
       playersLeague: localStorage.getItem('cahl-players-league') || '',
       playersDay: '',
       _sessions: null,
@@ -420,6 +423,40 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       { key: 'ppg', label: 'P/GP', num: true },
       { key: 'pim', label: 'PIM', num: true },
     ];
+
+    // Generic row sorter + sortable header renderer (used by roster/standings tables)
+    function sortRows(rows, key, dir, valFn) {
+      const d = dir === 'asc' ? 1 : -1;
+      return rows.slice().sort((a, b) => {
+        const va = valFn(key, a), vb = valFn(key, b);
+        if (va < vb) return -d;
+        if (va > vb) return d;
+        return 0;
+      });
+    }
+
+    function sortTh(key, label, sort, rt, num) {
+      const arrow = sort.key === key ? (sort.dir === 'desc' ? ' \u2193' : ' \u2191') : '';
+      return `<th${num ? ' class="num"' : ''} data-sort="${key}" data-rt="${rt}" tabindex="0" role="button" title="Sort by ${label}">${label}${arrow}</th>`;
+    }
+
+    const SKATER_VAL = (key, p) => {
+      if (key === 'name') return p.name.toLowerCase();
+      if (key === 'position') return (p.position || '').toLowerCase();
+      if (key === 'jersey') return isNaN(parseInt(p.jersey)) ? 9999 : parseInt(p.jersey);
+      if (key === 'ppg') return p.gp ? p.pts / p.gp : 0;
+      if (key === 'ggp') return p.gp ? p.g / p.gp : 0;
+      return p[key] ?? 0;
+    };
+
+    const GOALIE_VAL = (key, p) => {
+      if (key === 'name') return p.name.toLowerCase();
+      if (key === 'jersey') return isNaN(parseInt(p.jersey)) ? 9999 : parseInt(p.jersey);
+      if (key === 'winpct') return p.gp ? p.w / p.gp : 0;
+      return p[key] ?? 0;
+    };
+
+    const STANDINGS_VAL = (key, s) => key === 'team' ? s.team.toLowerCase() : (s[key] ?? 0);
 
     function boardRows() {
       const { level, sortKey, sortDir } = state.board;
@@ -916,10 +953,20 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       html += '</div>';
 
       html += '<div id="leagueSecStandings" class="league-sec" style="display:'+(active==='Standings'?'block':'none')+'">';
-      html += '<table><thead><tr><th>Team</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">PTS</th><th class="num">GF</th><th class="num">GA</th></tr></thead><tbody>';
-      html += data.standings.map(s => `
+      const st2 = state.standingsSort;
+      html += '<table><thead><tr>'
+        + sortTh('team', 'Team', st2, 'standings')
+        + sortTh('gp', 'GP', st2, 'standings', true)
+        + sortTh('w', 'W', st2, 'standings', true)
+        + sortTh('l', 'L', st2, 'standings', true)
+        + sortTh('otl', 'OTL', st2, 'standings', true)
+        + sortTh('pts', 'PTS', st2, 'standings', true)
+        + sortTh('gf', 'GF', st2, 'standings', true)
+        + sortTh('ga', 'GA', st2, 'standings', true)
+        + '</tr></thead><tbody>';
+      html += sortRows(data.standings, st2.key, st2.dir, STANDINGS_VAL).map(s => `
         <tr class="link" onclick="selectTeam('${s.team_id}')">
-          <td><span class="link">${s.team}</span></td>
+          <td><span class="link">${esc(s.team)}</span></td>
           <td class="num">${s.gp}</td><td class="num">${s.w}</td><td class="num">${s.l}</td><td class="num">${s.otl}</td>
           <td class="num">${s.pts}</td><td class="num">${s.gf}</td><td class="num">${s.ga}</td>
         </tr>`).join('');
@@ -1403,8 +1450,18 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       html += '</div>';
 
       html += '<h3 style="margin-top:18px">Standings</h3>';
-      html += '<table><thead><tr><th>Team</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">PTS</th><th class="num">GF</th><th class="num">GA</th></tr></thead><tbody>';
-      html += data.standings.map(s => `
+      const st = state.standingsSort;
+      html += '<table><thead><tr>'
+        + sortTh('team', 'Team', st, 'standings')
+        + sortTh('gp', 'GP', st, 'standings', true)
+        + sortTh('w', 'W', st, 'standings', true)
+        + sortTh('l', 'L', st, 'standings', true)
+        + sortTh('otl', 'OTL', st, 'standings', true)
+        + sortTh('pts', 'PTS', st, 'standings', true)
+        + sortTh('gf', 'GF', st, 'standings', true)
+        + sortTh('ga', 'GA', st, 'standings', true)
+        + '</tr></thead><tbody>';
+      html += sortRows(data.standings, st.key, st.dir, STANDINGS_VAL).map(s => `
         <tr ${s.team_id === teamId ? 'style="color:var(--accent);font-weight:700"' : ''}>
           <td>${esc(s.team)}</td><td class="num">${s.gp}</td><td class="num">${s.w}</td><td class="num">${s.l}</td><td class="num">${s.otl}</td>
           <td class="num">${s.pts}</td><td class="num">${s.gf}</td><td class="num">${s.ga}</td>
@@ -1428,10 +1485,22 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const totalPlayers = roster.sections.reduce((n, s) => n + s.players.length, 0) + roster.goalies.length;
       html += `<h3 style="margin-top:18px">Full Roster${totalPlayers ? ` <span style="color:var(--muted);font-weight:600">${totalPlayers}</span>` : ''}</h3>`;
 
-      const skaterHead = '<table><thead><tr><th>#</th><th>Player</th><th>Pos</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">P/GP</th><th class="num">G/GP</th><th class="num">PIM</th></tr></thead><tbody>';
+      const rs = state.rosterSort;
+      const skaterHead = '<table><thead><tr>'
+        + sortTh('jersey', '#', rs, 'skaters')
+        + sortTh('name', 'Player', rs, 'skaters')
+        + sortTh('position', 'Pos', rs, 'skaters')
+        + sortTh('gp', 'GP', rs, 'skaters', true)
+        + sortTh('g', 'G', rs, 'skaters', true)
+        + sortTh('a', 'A', rs, 'skaters', true)
+        + sortTh('pts', 'Pts', rs, 'skaters', true)
+        + sortTh('ppg', 'P/GP', rs, 'skaters', true)
+        + sortTh('ggp', 'G/GP', rs, 'skaters', true)
+        + sortTh('pim', 'PIM', rs, 'skaters', true)
+        + '</tr></thead><tbody>';
       roster.sections.forEach(sec => {
         html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
-        html += skaterHead + sec.players.slice().sort((a, b) => b.pts - a.pts).map(p => `
+        html += skaterHead + sortRows(sec.players, rs.key, rs.dir, SKATER_VAL).map(p => `
           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
             <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td>
@@ -1440,9 +1509,20 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       });
 
       if (roster.goalies.length) {
+        const gs = state.goalieSort;
         html += '<div class="form-chips-label">Goalies</div>';
-        html += '<table><thead><tr><th>#</th><th>Goalie</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">Win%</th><th class="num">GA</th><th class="num">GAA</th></tr></thead><tbody>';
-        html += roster.goalies.map(p => `
+        html += '<table><thead><tr>'
+          + sortTh('jersey', '#', gs, 'goalies')
+          + sortTh('name', 'Goalie', gs, 'goalies')
+          + sortTh('gp', 'GP', gs, 'goalies', true)
+          + sortTh('w', 'W', gs, 'goalies', true)
+          + sortTh('l', 'L', gs, 'goalies', true)
+          + sortTh('otl', 'OTL', gs, 'goalies', true)
+          + sortTh('winpct', 'Win%', gs, 'goalies', true)
+          + sortTh('ga', 'GA', gs, 'goalies', true)
+          + sortTh('gaa', 'GAA', gs, 'goalies', true)
+          + '</tr></thead><tbody>';
+        html += sortRows(roster.goalies, gs.key, gs.dir, GOALIE_VAL).map(p => `
           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
             <td class="num">${p.gp}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
@@ -1829,6 +1909,19 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const retryEl = e.target.closest('[data-pretry]');
       if (retryEl) {
         loadAllPlayers(true);
+        return;
+      }
+
+      // Roster/standings column sorting (data-rt scoped; re-renders from client cache)
+      const rtSortEl = e.target.closest('th[data-sort][data-rt]');
+      if (rtSortEl) {
+        const rt = rtSortEl.dataset.rt;
+        const key = rtSortEl.dataset.sort;
+        const st = rt === 'skaters' ? state.rosterSort : rt === 'goalies' ? state.goalieSort : state.standingsSort;
+        if (st.key === key) st.dir = st.dir === 'desc' ? 'asc' : 'desc';
+        else { st.key = key; st.dir = (key === 'name' || key === 'team' || key === 'position') ? 'asc' : 'desc'; }
+        if (rt === 'standings' && state.tab === 'league') await loadLeagueContent(state.leagueId);
+        else await loadTeamContent(state.teamId);
         return;
       }
 
