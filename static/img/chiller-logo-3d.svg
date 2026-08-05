@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 519 300" width="519" height="300" role="img" aria-label="OhioHealth Chiller Ice Rinks logo">
+  <defs>
+    <radialGradient id="navyBg" cx="42%" cy="32%" r="80%">
+      <stop offset="0%" stop-color="#0a3d7d"/>
+      <stop offset="55%" stop-color="#002654"/>
+      <stop offset="100%" stop-color="#001533"/>
+    </radialGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f2f5f9"/>
+      <stop offset="35%" stop-color="#9aa7b8"/>
+      <stop offset="65%" stop-color="#5d6b7d"/>
+      <stop offset="100%" stop-color="#c9d3df"/>
+    </linearGradient>
+    <linearGradient id="bevelTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="chillerFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="55%" stop-color="#eef3fb"/>
+      <stop offset="100%" stop-color="#a9b8cf"/>
+    </linearGradient>
+    <linearGradient id="starFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#d5deea"/>
+      <stop offset="100%" stop-color="#8fa0b5"/>
+    </linearGradient>
+    <linearGradient id="swoosh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2ea3ff"/>
+      <stop offset="100%" stop-color="#0a5dc2"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="blurShadow">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <!-- ground shadow for 3D depth on transparent backgrounds -->
+  <ellipse cx="259" cy="276" rx="205" ry="14" fill="#000000" opacity="0.22" filter="url(#blurShadow)"/>
+
+  <!-- metallic outer ring -->
+  <ellipse cx="259" cy="150" rx="244" ry="134" fill="url(#ringGrad)" filter="url(#softShadow)"/>
+  <!-- navy body -->
+  <ellipse cx="259" cy="150" rx="236" ry="126" fill="url(#navyBg)"/>
+  <!-- top bevel highlight (3D) -->
+  <ellipse cx="259" cy="150" rx="228" ry="118" fill="url(#bevelTop)"/>
+  <!-- inner edge shading at bottom -->
+  <ellipse cx="259" cy="150" rx="236" ry="126" fill="none" stroke="#000000" stroke-opacity="0.35" stroke-width="3"/>
+
+  <!-- red accent dashes along the lower-left interior arc -->
+  <g fill="#ce1126">
+    <rect x="104" y="212" width="3.4" height="15" rx="1.6" transform="rotate(-16 105 219)"/>
+    <rect x="118" y="222" width="3.4" height="16" rx="1.6" transform="rotate(-13 119 230)"/>
+    <rect x="134" y="230" width="3.4" height="17" rx="1.6" transform="rotate(-10 135 238)"/>
+    <rect x="151" y="237" width="3.4" height="17" rx="1.6" transform="rotate(-7 152 245)"/>
+    <rect x="169" y="242" width="3.4" height="17" rx="1.6" transform="rotate(-4 170 250)"/>
+    <rect x="187" y="245" width="3.4" height="16" rx="1.6" transform="rotate(-2 188 253)"/>
+    <rect x="206" y="247" width="3.4" height="15" rx="1.6"/>
+    <rect x="224" y="247" width="3.4" height="15" rx="1.6" transform="rotate(3 225 254)"/>
+    <rect x="242" y="245" width="3.4" height="14" rx="1.6" transform="rotate(6 243 252)"/>
+  </g>
+
+  <!-- OhioHealth plus mark -->
+  <g fill="#dce8f7" filter="url(#textShadow)">
+    <rect x="63" y="44" width="12" height="12" rx="2"/>
+    <rect x="77" y="44" width="12" height="12" rx="2"/>
+    <rect x="49" y="58" width="12" height="12" rx="2"/>
+    <rect x="63" y="58" width="12" height="12" rx="2"/>
+    <rect x="77" y="58" width="12" height="12" rx="2"/>
+    <rect x="91" y="58" width="12" height="12" rx="2"/>
+    <rect x="63" y="72" width="12" height="12" rx="2"/>
+    <rect x="77" y="72" width="12" height="12" rx="2"/>
+  </g>
+  <text x="112" y="72" font-family="Inter, Arial, Helvetica, sans-serif" font-size="31" font-weight="800" fill="#f4f8ff" filter="url(#textShadow)">OhioHealth</text>
+
+  <!-- CHILLER wordmark with 3D depth -->
+  <text x="250" y="182" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="84" font-weight="800" font-style="italic" letter-spacing="2" fill="url(#chillerFill)" stroke="#7e93ad" stroke-width="1.6" filter="url(#textShadow)">CHILLER</text>
+
+  <!-- ICE RINKS -->
+  <text x="243" y="222" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="700" font-style="italic" letter-spacing="6" fill="#dce6f2" filter="url(#textShadow)">ICE RINKS</text>
+  <rect x="150" y="232" width="190" height="6" rx="3" fill="url(#swoosh)" filter="url(#textShadow)"/>
+
+  <!-- star, right side, hugging the ring -->
+  <g transform="translate(446 140) rotate(-12) scale(0.82)" filter="url(#softShadow)">
+    <path d="M0 -46 L11.3 -15.4 L44.2 -14.2 L18.2 5.9 L27.3 37.2 L0 18.6 L-27.3 37.2 L-18.2 5.9 L-44.2 -14.2 L-11.3 -15.4 Z"
+          fill="url(#starFill)" stroke="#6d7d90" stroke-width="2" stroke-linejoin="round"/>
+  </g>
+</svg>
