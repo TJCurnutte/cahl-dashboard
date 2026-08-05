@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 28;
+const JS_VERSION = 29;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -1785,18 +1785,8 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
     // Delegated league-picker + change-league clicks
     $main.addEventListener('click', async (e) => {
-      // Typeahead item selection
-      const taItem = e.target.closest('.typeahead-item[data-tid]');
-      if (taItem) {
-        const input = $('#teamSearch');
-        const box = $('#teamSuggest');
-        if (input) input.value = '';
-        if (box) taClose(input, box);
-        pickSearchedTeam(taItem.dataset.tid, taItem.dataset.lid);
-        return;
-      }
-
-      // Player lookup item selection
+      // Player lookup item selection — must come BEFORE the team check,
+      // because player items also carry data-tid for game-log context
       const paItem = e.target.closest('.typeahead-item[data-ptoken]');
       if (paItem) {
         const input = $('#playerSearch');
@@ -1809,6 +1799,17 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
           teamName: paItem.dataset.tname,
           playerName: paItem.dataset.pname,
         });
+        return;
+      }
+
+      // Team search typeahead item selection
+      const taItem = e.target.closest('.typeahead-item[data-tid]');
+      if (taItem) {
+        const input = $('#teamSearch');
+        const box = $('#teamSuggest');
+        if (input) input.value = '';
+        if (box) taClose(input, box);
+        pickSearchedTeam(taItem.dataset.tid, taItem.dataset.lid);
         return;
       }
 
