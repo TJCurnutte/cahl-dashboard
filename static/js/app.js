@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 22;
+const JS_VERSION = 23;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -659,7 +659,12 @@ const $main = document.getElementById('main');
       // Very rough "live" guess: if today and time within the last 3h
       const timeStr = (g.time || '').replace(/\s+/g, '');
       let live = false;
-      if (played && !g.home_score && !g.away_score && timeStr) {
+      // Only games dated today can be live — future sessions must never show LIVE
+      const isToday = !g.date || (() => {
+        const dt = parseGameDate(g.date);
+        return dt && dateKey(dt) === dateKey(now);
+      })();
+      if (isToday && played && !g.home_score && !g.away_score && timeStr) {
         const [h, m] = timeStr.match(/(\d+):(\d+)/)?.slice(1) || [];
         const ampm = timeStr.toLowerCase().includes('pm');
         if (h) {

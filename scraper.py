@@ -898,11 +898,24 @@ def enrich_today_scores(home_data, max_workers=8):
                     break
 
 
+def _normalize_session_date(s):
+    """'Monday, August 10' -> 'Aug 10' (matches schedule-page date labels)."""
+    s = (s or "").strip()
+    for fmt in ("%A, %B %d", "%B %d", "%b %d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%b %-d")
+        except ValueError:
+            continue
+    return s
+
+
 def parse_league_sessions(league_id, max_workers=8):
     """Aggregate every game in a league's season, grouped by date ("session").
 
     Each team's schedule page lists the same games, so we dedupe by
-    (date, time, home, away). Returns sessions in chronological order.
+    (date, time, home, away, facility). The schedule pages only cover games
+    up to now, so future games are merged in from the dashboard's Upcoming
+    section. Returns sessions in chronological order.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -928,6 +941,30 @@ def parse_league_sessions(league_id, max_workers=8):
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         list(ex.map(fetch, team_ids))
+
+    # Schedule pages only run up to now — merge future games from the
+    # dashboard's Upcoming Games section (playoffs, next game nights).
+    for g in dash.get("upcoming", []):
+        norm = _normalize_session_date(g.get("date", ""))
+        if not norm:
+            continue
+        key = (norm, g["time"], g["home"].strip().lower(), g["away"].strip().lower(),
+               (g.get("facility") or "").strip().lower())
+        if key not in games:
+            games[key] = {
+                "date": norm,
+                "time": g["time"],
+                "facility": g.get("facility", ""),
+                "rink": "",
+                "home": g["home"],
+                "home_id": g.get("home_id"),
+                "away": g["away"],
+                "away_id": g.get("away_id"),
+                "home_score": 0,
+                "away_score": 0,
+                "score_sheet": None,
+                "played": False,
+            }
 
     if not games and errors:
         return None, "; ".join(errors[:3])
