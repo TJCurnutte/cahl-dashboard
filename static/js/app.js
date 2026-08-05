@@ -27,6 +27,15 @@ const $main = document.getElementById('main');
     function $(sel){ return document.querySelector(sel); }
     function fmtTime(t){ return t || 'TBD'; }
 
+    // Desktop vs mobile context: body.is-desktop mirrors the 900px CSS breakpoint
+    const desktopMQ = window.matchMedia('(min-width: 900px)');
+    function syncViewportClass() {
+      document.body.classList.toggle('is-desktop', desktopMQ.matches);
+      document.body.classList.toggle('is-mobile', !desktopMQ.matches);
+    }
+    syncViewportClass();
+    desktopMQ.addEventListener('change', syncViewportClass);
+
     // ---- Two-step league picker: day chips -> league pills ----
     const DAY_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Other'];
 
@@ -483,10 +492,10 @@ const $main = document.getElementById('main');
       html += '<div id="leagueSecScores" class="league-sec" style="display:'+(active==='Scores'?'block':'none')+'">';
       html += '<h3>Latest Scores</h3>';
       if (!data.recent.length) html += '<div class="empty">No recent scores yet.</div>';
-      html += data.recent.map(g => gameHtml(g)).join('');
+      html += '<div class="games-grid">' + data.recent.map(g => gameHtml(g)).join('') + '</div>';
       html += '<h3 style="margin-top:18px">Upcoming</h3>';
       if (!data.upcoming.length) html += '<div class="empty">No upcoming games.</div>';
-      html += data.upcoming.map(g => gameHtml(g)).join('');
+      html += '<div class="games-grid">' + data.upcoming.map(g => gameHtml(g)).join('') + '</div>';
       html += '</div>';
 
       html += '<div id="leagueSecStandings" class="league-sec" style="display:'+(active==='Standings'?'block':'none')+'">';
@@ -575,7 +584,7 @@ const $main = document.getElementById('main');
       const cur = sessions.find(s => s.date === sel);
       const finals = cur.games.filter(g => g.played).length;
       html += `<div class="picker-hint">${cur.games.length} games · ${finals} final</div>`;
-      html += cur.games.map(g => gameHtml(g)).join('');
+      html += '<div class="games-grid">' + cur.games.map(g => gameHtml(g)).join('') + '</div>';
       $sec.innerHTML = html;
       animateNumbers($sec);
     }

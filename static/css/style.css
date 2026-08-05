@@ -1108,6 +1108,72 @@ nav a.active svg, .nav-link.active svg {
   table { font-size: 14px; }
 }
 
+/* ============================================================
+   Desktop / web-browser layout (not a phone app)
+   ============================================================ */
+
+@media (min-width: 900px) {
+  #app { max-width: 1100px; }
+
+  /* Nav becomes a top bar instead of a bottom phone dock */
+  header { order: 0; }
+  nav {
+    order: 1;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-top: none;
+    border-bottom: 1px solid var(--glass-border);
+    background: transparent;
+  }
+  main { order: 2; }
+
+  nav a, .nav-link {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 999px;
+  }
+
+  nav a svg, .nav-link svg { width: 17px; height: 17px; }
+
+  nav a.active, .nav-link.active {
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: var(--blur);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-highlight);
+  }
+
+  main { padding: 30px 36px 40px; }
+
+  /* Two-column grids for dense lists */
+  .today-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 24px;
+  }
+
+  .games-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .games-grid .game-card { margin-bottom: 0; }
+
+  .record-row { gap: 14px; }
+
+  .stat-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+
+  .card { padding: 24px; }
+
+  table { font-size: 14px; }
+}
+
 /* Respect users who prefer less motion */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
