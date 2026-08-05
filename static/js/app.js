@@ -36,6 +36,18 @@ const $main = document.getElementById('main');
     syncViewportClass();
     desktopMQ.addEventListener('change', syncViewportClass);
 
+    // ---- Theme toggle (light <-> dark), persisted ----
+    const rootEl = document.documentElement;
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    function applyTheme(t) {
+      rootEl.setAttribute('data-theme', t);
+      localStorage.setItem('cahl-theme', t);
+      if (themeMeta) themeMeta.setAttribute('content', t === 'dark' ? '#070d1a' : '#002654');
+    }
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      applyTheme(rootEl.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+
     // ---- Two-step league picker: day chips -> league pills ----
     const DAY_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Other'];
 

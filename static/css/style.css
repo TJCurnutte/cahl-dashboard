@@ -985,6 +985,89 @@ nav a.active, .nav-link.active {
 }
 
 /* ============================================================
+   Dark mode — CBJ night variant (toggle in header)
+   ============================================================ */
+
+html[data-theme="dark"] {
+  --bg: #070d1a;
+  --panel: rgba(17, 32, 56, 0.60);
+  --panel-2: rgba(23, 40, 68, 0.80);
+  --text: #eaf1fb;
+  --muted: #93a5c0;
+  --accent: #e6394f;
+  --accent-2: #a9c6f5;
+  --danger: #ff5d6c;
+  --warning: #ffd166;
+  --border: rgba(255, 255, 255, 0.10);
+
+  --glass-bg: rgba(17, 32, 56, 0.60);
+  --glass-bg-strong: rgba(23, 40, 68, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  --win: #34e2a8;
+  --loss: #ff5d6c;
+  --tie: #a9b8cf;
+
+  --navy-glass: rgba(0, 20, 45, 0.92);
+}
+
+html[data-theme="dark"] body::before {
+  background:
+    radial-gradient(40% 32% at 10% 6%,  rgba(74, 124, 220, 0.20), transparent 70%),
+    radial-gradient(36% 30% at 90% 12%, rgba(206, 17, 38, 0.13), transparent 70%),
+    radial-gradient(44% 36% at 80% 90%, rgba(0, 90, 200, 0.15), transparent 70%),
+    radial-gradient(38% 32% at 16% 94%, rgba(150, 160, 180, 0.10), transparent 70%);
+}
+
+html[data-theme="dark"] * { scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+html[data-theme="dark"] *::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); }
+
+html[data-theme="dark"] .skeleton::after,
+html[data-theme="dark"] .skeleton-card::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+
+html[data-theme="dark"] .bar { background: rgba(255, 255, 255, 0.08); }
+
+html[data-theme="dark"] tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+
+html[data-theme="dark"] .form-chip.w { background: rgba(52, 226, 168, 0.14); border-color: rgba(52, 226, 168, 0.38); }
+html[data-theme="dark"] .form-chip.l { background: rgba(255, 93, 108, 0.14); border-color: rgba(255, 93, 108, 0.38); }
+html[data-theme="dark"] .form-chip.t { background: rgba(169, 184, 207, 0.14); border-color: rgba(169, 184, 207, 0.38); }
+
+html[data-theme="dark"] .streak-badge.win  { background: rgba(52, 226, 168, 0.14); border-color: rgba(52, 226, 168, 0.38); }
+html[data-theme="dark"] .streak-badge.loss { background: rgba(255, 93, 108, 0.14); border-color: rgba(255, 93, 108, 0.38); }
+html[data-theme="dark"] .streak-badge.tie  { background: rgba(169, 184, 207, 0.14); border-color: rgba(169, 184, 207, 0.38); }
+
+html[data-theme="dark"] .timeline::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0));
+}
+
+html[data-theme="dark"] .error {
+  background: rgba(255, 93, 108, 0.10);
+  border-color: rgba(255, 93, 108, 0.30);
+}
+
+/* Theme toggle icon visibility */
+.theme-icon {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -2px;
+}
+
+html[data-theme="light"] .theme-icon-sun { display: none; }
+html[data-theme="dark"] .theme-icon-moon { display: none; }
+
+/* ============================================================
    Reduced motion
    ============================================================ */
 
