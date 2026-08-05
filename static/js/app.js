@@ -147,7 +147,7 @@ const $main = document.getElementById('main');
       html += `<span class="pill day-pill ${!state.playersLeague ? 'active' : ''}" data-pl-all="1" tabindex="0" role="button">All CAHL</span>`;
       DAY_ORDER.forEach(d => {
         if (!groups[d].length) return;
-        html += `<span class="pill day-pill ${d === activeDay && state.playersLeague ? 'active' : ''}" data-pl-day="${d}" tabindex="0" role="button">${d}<span class="pill-count">${groups[d].length}</span></span>`;
+        html += `<span class="pill day-pill ${d === activeDay ? 'active' : ''}" data-pl-day="${d}" tabindex="0" role="button">${d}<span class="pill-count">${groups[d].length}</span></span>`;
       });
       html += '</div>';
       if (activeDay && groups[activeDay] && groups[activeDay].length) {
@@ -1323,13 +1323,22 @@ const $main = document.getElementById('main');
       const plAll = e.target.closest('[data-pl-all]');
       if (plAll) {
         state.playersLeague = '';
+        state.playersDay = '';
         localStorage.removeItem('cahl-players-league');
         await renderPlayers();
         return;
       }
       const plDay = e.target.closest('[data-pl-day]');
       if (plDay) {
-        state.playersDay = plDay.dataset.plDay;
+        const day = plDay.dataset.plDay;
+        state.playersDay = day;
+        // Immediately filter to that day's first division so content always matches the picker
+        const groups = leagueGroups();
+        const first = (groups[day] || [])[0];
+        if (first) {
+          state.playersLeague = first.id;
+          localStorage.setItem('cahl-players-league', first.id);
+        }
         await renderPlayers();
         return;
       }
