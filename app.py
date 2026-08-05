@@ -110,6 +110,71 @@ def teams():
     return jsonify(data)
 
 
+_PLAYERS_CACHE = {"data": None, "ts": 0}
+_PLAYERS_TTL = 900  # 15 minutes; rosters change slowly, fan-out is expensive
+
+
+@app.route("/api/players")
+def players():
+    """Every player on every team across all leagues (for the player lookup)."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+    now = time.time()
+    if _PLAYERS_CACHE["data"] is not None and now - _PLAYERS_CACHE["ts"] < _PLAYERS_TTL:
+        return jsonify(_PLAYERS_CACHE["data"])
+
+    teams_data, err = scraper.parse_all_teams()
+    if err:
+        return jsonify({"error": err}), 502
+
+    index = {}
+    errors = []
+
+    def fetch(team):
+        roster, e = scraper.parse_team_stats(team["id"])
+        if e:
+            errors.append(e)
+            return
+        if not roster:
+            return
+        for sec in roster.get("sections", []):
+            for p in sec["players"]:
+                key = f"{p['name'].lower()}|{team['id']}"
+                index[key] = {
+                    "name": p["name"],
+                    "team": team["name"],
+                    "team_id": team["id"],
+                    "league_id": team["league_id"],
+                    "league_name": team["league_name"],
+                    "position": p.get("position") or sec["label"],
+                    "jersey": p.get("jersey", "-"),
+                    "token": p.get("token"),
+                }
+        for g in roster.get("goalies", []):
+            key = f"{g['name'].lower()}|{team['id']}"
+            index[key] = {
+                "name": g["name"],
+                "team": team["name"],
+                "team_id": team["id"],
+                "league_id": team["league_id"],
+                "league_name": team["league_name"],
+                "position": "Goalie",
+                "jersey": g.get("jersey", "-"),
+                "token": g.get("token"),
+            }
+
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        list(ex.map(fetch, teams_data))
+
+    if not index and errors:
+        return jsonify({"error": "; ".join(errors[:3])}), 502
+
+    data = sorted(index.values(), key=lambda p: p["name"].lower())
+    _PLAYERS_CACHE["data"] = data
+    _PLAYERS_CACHE["ts"] = now
+    return jsonify(data)
+
+
 _SESSIONS_CACHE = {}
 _SESSIONS_TTL = 300  # 5 minutes; aggregating every team's schedule is expensive
 
@@ -145,6 +210,8 @@ def refresh():
     scraper.clear_cache()
     _TEAMS_CACHE["data"] = None
     _TEAMS_CACHE["ts"] = 0
+    _PLAYERS_CACHE["data"] = None
+    _PLAYERS_CACHE["ts"] = 0
     _SESSIONS_CACHE.clear()
     return jsonify({"ok": True})
 

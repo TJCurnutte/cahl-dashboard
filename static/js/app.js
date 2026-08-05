@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 19;
+const JS_VERSION = 20;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -26,6 +26,8 @@ const $main = document.getElementById('main');
       teams: [],
       allTeams: [],
       allTeamsLoading: false,
+      allPlayers: [],
+      allPlayersLoading: false,
       playersLeague: localStorage.getItem('cahl-players-league') || '',
       playersDay: '',
       _sessions: null,
@@ -237,6 +239,19 @@ const $main = document.getElementById('main');
       if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    async function loadAllPlayers() {
+      if (state.allPlayers.length || state.allPlayersLoading) return;
+      state.allPlayersLoading = true;
+      try {
+        const res = await fetch('/api/players');
+        const data = await res.json();
+        if (Array.isArray(data)) state.allPlayers = data;
+      } catch (e) { /* dropdown keeps showing loading */ }
+      state.allPlayersLoading = false;
+      const input = $('#playerSearch');
+      if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     async function pickSearchedTeam(teamId, leagueId) {
       state.teamId = teamId;
       localStorage.setItem('cahl-team', teamId);
@@ -290,6 +305,60 @@ const $main = document.getElementById('main');
       taIndex = -1;
       box.classList.add('open');
       input.setAttribute('aria-expanded', 'true');
+    }
+
+    // ---- Player lookup typeahead (Players tab) ----
+    let paIndex = -1;
+
+    function playerSearchHtml() {
+      return `<div class="team-search">
+        <input id="playerSearch" type="text" role="combobox" aria-autocomplete="list" aria-controls="playerSuggest" aria-expanded="false" aria-label="Search for a player" placeholder="Type a player name…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <div id="playerSuggest" class="typeahead" role="listbox"></div>
+      </div>`;
+    }
+
+    function paItems() {
+      const box = $('#playerSuggest');
+      return box ? [...box.querySelectorAll('.typeahead-item[data-ptoken]')] : [];
+    }
+
+    function paHighlight(items) {
+      items.forEach((item, i) => item.classList.toggle('ta-active', i === paIndex));
+      if (items[paIndex]) items[paIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    function paClose(input, box) {
+      box.classList.remove('open');
+      if (input) input.setAttribute('aria-expanded', 'false');
+      paIndex = -1;
+    }
+
+    function renderPlayerTypeahead(input) {
+      const box = $('#playerSuggest');
+      if (!box) return;
+      const q = input.value.trim().toLowerCase();
+      if (!q) { box.innerHTML = ''; paClose(input, box); return; }
+      const matches = state.allPlayers.filter(p =>
+        p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q)
+      ).slice(0, 10);
+      if (!state.allPlayers.length) {
+        box.innerHTML = '<div class="typeahead-item muted">Loading players…</div>';
+      } else if (!matches.length) {
+        box.innerHTML = '<div class="typeahead-item muted">No players match</div>';
+      } else {
+        box.innerHTML = matches.map(p =>
+          `<div class="typeahead-item" role="option" data-ptoken="${p.token || ''}"><span class="ta-name">${esc(p.name)}</span><span class="ta-league">${esc(p.team)} · ${esc(p.position || '')}</span></div>`
+        ).join('');
+      }
+      paIndex = -1;
+      box.classList.add('open');
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function pickSearchedPlayer(token) {
+      if (!token) { showToast('No profile link for that player'); return; }
+      state.profileReturn = 'players';
+      renderPlayerProfile(null, null, token);
     }
 
     function _legacyBindTeamSearch() {
@@ -466,6 +535,7 @@ const $main = document.getElementById('main');
       state.cache = {};
       state._sessions = null;
       state.allTeams = [];
+      state.allPlayers = [];
       await loadActiveTab(true);
       $refresh.innerHTML = 'Refresh';
       $refresh.disabled = false;
@@ -1215,7 +1285,11 @@ const $main = document.getElementById('main');
         state.leagues = home.leagues || [];
       }
 
-      let html = '<div class="card">';
+      // Player lookup at the very top — search any player, tap for all-time stats
+      let html = '<div class="card player-lookup-card"><h2>Player Lookup</h2>' + playerSearchHtml()
+        + '<div class="picker-hint">Search any player across all CAHL teams — tap a name for their all-time stats</div></div>';
+
+      html += '<div class="card">';
       if (state.playersLeague) {
         html += `<h2>Player Leaders · ${currentPlayersLeagueName()}</h2>`;
       } else {
@@ -1250,25 +1324,41 @@ const $main = document.getElementById('main');
       const data = await api(path);
       if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
 
-      let html = `<div class="card"><h2>${data.name}</h2>`;
+      let html = `<div class="card"><h2>${esc(data.name)}</h2>`;
       if (data.history.length) {
         const totals = data.history.reduce((acc, h) => {
           acc.gp += h.gp; acc.g += h.g; acc.a += h.a; acc.pts += h.pts; acc.pim += h.pim;
+          acc.esg += h.esg || 0; acc.ppg += h.ppg || 0; acc.shg += h.shg || 0; acc.sog += h.sog || 0;
           return acc;
-        }, { gp: 0, g: 0, a: 0, pts: 0, pim: 0 });
-        html += '<h3>Career Totals</h3><div class="stat-grid">' +
+        }, { gp: 0, g: 0, a: 0, pts: 0, pim: 0, esg: 0, ppg: 0, shg: 0, sog: 0 });
+        const pgp = totals.gp ? (totals.pts / totals.gp).toFixed(2) : '-';
+        const shPct = totals.sog ? Math.round((totals.g / totals.sog) * 100) + '%' : '-';
+        html += '<h3>All-Time Totals</h3><div class="stat-grid">' +
           `<div class="stat-box"><div class="num">${totals.gp}</div><div class="label">Games</div></div>` +
           `<div class="stat-box"><div class="num">${totals.g}</div><div class="label">Goals</div></div>` +
           `<div class="stat-box"><div class="num">${totals.a}</div><div class="label">Assists</div></div>` +
           `<div class="stat-box"><div class="num">${totals.pts}</div><div class="label">Points</div></div>` +
+          `<div class="stat-box"><div class="num">${pgp}</div><div class="label">P/GP</div></div>` +
+          `<div class="stat-box"><div class="num">${shPct}</div><div class="label">Shooting %</div></div>` +
           `<div class="stat-box"><div class="num">${totals.pim}</div><div class="label">PIM</div></div>` +
           `<div class="stat-box"><div class="num">${data.history.length}</div><div class="label">Seasons</div></div>` +
-          '</div><h3 style="margin-top:18px">Season by Season</h3>';
+          '</div>';
+
+        html += '<div class="form-chips-label">Special teams (all-time)</div><div class="stat-grid">' +
+          `<div class="stat-box"><div class="num">${totals.esg}</div><div class="label">Even Strength</div></div>` +
+          `<div class="stat-box"><div class="num">${totals.ppg}</div><div class="label">Power Play</div></div>` +
+          `<div class="stat-box"><div class="num">${totals.shg}</div><div class="label">Short Handed</div></div>` +
+          `<div class="stat-box"><div class="num">${totals.sog}</div><div class="label">Shots</div></div>` +
+          '</div>';
+
+        html += '<h3 style="margin-top:18px">Season by Season</h3>';
       }
-      html += '<table><thead><tr><th>Season</th><th>League</th><th>Team</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">PIM</th></tr></thead><tbody>';
+      html += '<table><thead><tr><th>Season</th><th>League</th><th>Team</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">P/GP</th><th class="num">ESG</th><th class="num">PPG</th><th class="num">SHG</th><th class="num">SOG</th><th class="num">PIM</th></tr></thead><tbody>';
       html += data.history.map(h => `
-        <tr><td>${h.season}</td><td>${h.league}</td><td>${h.team}</td>
-        <td class="num">${h.gp}</td><td class="num">${h.g}</td><td class="num">${h.a}</td><td class="num">${h.pts}</td><td class="num">${h.pim}</td></tr>`).join('');
+        <tr><td>${esc(h.season)}</td><td>${esc(h.league)}</td><td>${esc(h.team)}</td>
+        <td class="num">${h.gp}</td><td class="num">${h.g}</td><td class="num">${h.a}</td><td class="num">${h.pts}</td>
+        <td class="num">${h.gp ? (h.pts / h.gp).toFixed(2) : '-'}</td>
+        <td class="num">${h.esg || 0}</td><td class="num">${h.ppg || 0}</td><td class="num">${h.shg || 0}</td><td class="num">${h.sog || 0}</td><td class="num">${h.pim}</td></tr>`).join('');
       html += '</tbody></table></div>';
       const backTab = state.profileReturn || 'players';
       const backLabels = { today: 'Today', league: 'League', team: 'Team', players: 'Leaders', analytics: 'Analytics' };
@@ -1408,47 +1498,54 @@ const $main = document.getElementById('main');
       }
     });
 
-    // Team search typeahead — fully delegated (re-renders can't leak listeners)
+    // Team/player search typeaheads — fully delegated (re-renders can't leak listeners)
     $main.addEventListener('focusin', e => {
       if (e.target.id === 'teamSearch') loadAllTeams();
+      if (e.target.id === 'playerSearch') loadAllPlayers();
     });
 
     $main.addEventListener('input', e => {
       if (e.target.id === 'teamSearch') renderTypeahead(e.target);
+      if (e.target.id === 'playerSearch') renderPlayerTypeahead(e.target);
     });
 
     $main.addEventListener('keydown', e => {
-      if (e.target.id !== 'teamSearch') return;
+      const isTeam = e.target.id === 'teamSearch';
+      const isPlayer = e.target.id === 'playerSearch';
+      if (!isTeam && !isPlayer) return;
       const input = e.target;
-      const box = $('#teamSuggest');
-      const items = taItems();
+      const box = $(isTeam ? '#teamSuggest' : '#playerSuggest');
+      const items = isTeam ? taItems() : paItems();
+      const getIdx = () => isTeam ? taIndex : paIndex;
+      const setIdx = v => { if (isTeam) taIndex = v; else paIndex = v; };
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        taIndex = Math.min(taIndex + 1, items.length - 1);
-        taHighlight(items);
+        setIdx(Math.min(getIdx() + 1, items.length - 1));
+        (isTeam ? taHighlight : paHighlight)(items);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        taIndex = Math.max(taIndex - 1, 0);
-        taHighlight(items);
+        setIdx(Math.max(getIdx() - 1, 0));
+        (isTeam ? taHighlight : paHighlight)(items);
       } else if (e.key === 'Enter') {
-        const pick = items[taIndex] || items[0];
-        if (pick) {
-          if (box) taClose(input, box);
-          input.value = '';
-          pickSearchedTeam(pick.dataset.tid, pick.dataset.lid);
-        }
+        const pick = items[getIdx()] || items[0];
+        if (!pick) return;
+        if (box) (isTeam ? taClose : paClose)(input, box);
+        input.value = '';
+        if (isTeam) pickSearchedTeam(pick.dataset.tid, pick.dataset.lid);
+        else pickSearchedPlayer(pick.dataset.ptoken);
       } else if (e.key === 'Escape') {
-        if (box) taClose(input, box);
+        if (box) (isTeam ? taClose : paClose)(input, box);
         input.blur();
       }
     });
 
-    // Outside click closes the typeahead (bound once)
+    // Outside click closes any open typeahead (bound once)
     document.addEventListener('click', e => {
-      const box = $('#teamSuggest');
-      if (box && box.classList.contains('open') && !e.target.closest('.team-search')) {
-        taClose($('#teamSearch'), box);
-      }
+      if (e.target.closest('.team-search')) return;
+      const tBox = $('#teamSuggest');
+      if (tBox && tBox.classList.contains('open')) taClose($('#teamSearch'), tBox);
+      const pBox = $('#playerSuggest');
+      if (pBox && pBox.classList.contains('open')) paClose($('#playerSearch'), pBox);
     });
 
     // Delegated league-picker + change-league clicks
@@ -1461,6 +1558,17 @@ const $main = document.getElementById('main');
         if (input) input.value = '';
         if (box) taClose(input, box);
         pickSearchedTeam(taItem.dataset.tid, taItem.dataset.lid);
+        return;
+      }
+
+      // Player lookup item selection
+      const paItem = e.target.closest('.typeahead-item[data-ptoken]');
+      if (paItem) {
+        const input = $('#playerSearch');
+        const box = $('#playerSuggest');
+        if (input) input.value = '';
+        if (box) paClose(input, box);
+        pickSearchedPlayer(paItem.dataset.ptoken);
         return;
       }
 
