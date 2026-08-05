@@ -13,6 +13,8 @@ const $main = document.getElementById('main');
       teams: [],
       allTeams: [],
       allTeamsLoading: false,
+      playersLeague: localStorage.getItem('cahl-players-league') || '',
+      playersDay: '',
       leaders: null,
       cache: {}
     };
@@ -104,6 +106,40 @@ const $main = document.getElementById('main');
 
     function changeLeagueHtml() {
       return `<div class="picker-current">League: <b>${currentLeagueName()}</b> <span class="link" data-change-league>Change</span></div>`;
+    }
+
+    // ---- Players-tab division filter (independent of main league selection) ----
+    function playersPickerHtml() {
+      const groups = leagueGroups();
+      const activeDay = state.playersDay || (state.playersLeague ? leagueDay(currentPlayersLeagueName()) : '');
+      let html = '<div class="picker-days">';
+      html += `<span class="pill day-pill ${!state.playersLeague ? 'active' : ''}" data-pl-all="1">All CAHL</span>`;
+      DAY_ORDER.forEach(d => {
+        if (!groups[d].length) return;
+        html += `<span class="pill day-pill ${d === activeDay && state.playersLeague ? 'active' : ''}" data-pl-day="${d}">${d}<span class="pill-count">${groups[d].length}</span></span>`;
+      });
+      html += '</div>';
+      if (activeDay && groups[activeDay] && groups[activeDay].length) {
+        html += '<div class="picker-leagues">';
+        groups[activeDay].forEach(l => {
+          html += `<span class="pill league-pill ${l.id === state.playersLeague ? 'active' : ''}" data-pl-lid="${l.id}">${shortLeagueName(l.name)}</span>`;
+        });
+        html += '</div>';
+      }
+      return html;
+    }
+
+    function currentPlayersLeagueName() {
+      const l = state.leagues.find(x => x.id === state.playersLeague);
+      return l ? l.name : '';
+    }
+
+    function leaderSection(title, list, valKey) {
+      if (!list || !list.length) return '';
+      const rows = list.map(p =>
+        `<tr class="link" onclick="selectPlayer('${p.team_id || ''}','${p.player_id || ''}')"><td class="num">${p.rank || ''}</td><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
+      ).join('');
+      return `<h3 style="margin-top:16px">${title}</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">${title}</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
 
     // ---- Global team search with typeahead ----
@@ -604,21 +640,37 @@ const $main = document.getElementById('main');
     }
 
     async function renderPlayers(refresh) {
+      if (!state.leagues.length) {
+        const home = await api('/api/today');
+        state.leagues = home.leagues || [];
+      }
+
+      let html = '<div class="card">';
+      if (state.playersLeague) {
+        html += `<h2>Player Leaders · ${currentPlayersLeagueName()}</h2>`;
+      } else {
+        html += '<h2>CAHL Player Leaders</h2>';
+      }
+      html += playersPickerHtml();
+
+      if (state.playersLeague) {
+        const data = await api(`/api/league/${state.playersLeague}`, refresh);
+        if (data.error) { setMainHtml(html + `<div class="error">${data.error}</div></div>`); return; }
+        html += leaderSection('Pts', data.leaders.points, 'value');
+        html += leaderSection('G', data.leaders.goals, 'value');
+        html += leaderSection('A', data.leaders.assists, 'value');
+        html += leaderSection('PIM', data.leaders.pim, 'value');
+        html += '</div>';
+        setMainHtml(html);
+        return;
+      }
+
       const data = await api('/api/leaders', refresh);
-      if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
-
-      let html = '<div class="card"><h2>CAHL Player Leaders</h2>';
-      html += '<h3>Points</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
-      html += data.points.map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td class="num">${p.rank}</td><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.points}</td></tr>`).join('');
-      html += '</tbody></table>';
-
-      html += '<h3 style="margin-top:18px">Goals</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">G</th></tr></thead><tbody>';
-      html += data.goals.map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td class="num">${p.rank}</td><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.goals}</td></tr>`).join('');
-      html += '</tbody></table>';
-
-      html += '<h3 style="margin-top:18px">Assists</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">A</th></tr></thead><tbody>';
-      html += data.assists.map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td class="num">${p.rank}</td><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.assists}</td></tr>`).join('');
-      html += '</tbody></table></div>';
+      if (data.error) { setMainHtml(html + `<div class="error">${data.error}</div></div>`); return; }
+      html += leaderSection('Pts', data.points, 'points');
+      html += leaderSection('G', data.goals, 'goals');
+      html += leaderSection('A', data.assists, 'assists');
+      html += '</div>';
       setMainHtml(html);
     }
 
@@ -727,6 +779,30 @@ const $main = document.getElementById('main');
 
     // Delegated league-picker + change-league clicks
     $main.addEventListener('click', async (e) => {
+      // Players-tab division filter (separate state from main league picker)
+      const plAll = e.target.closest('[data-pl-all]');
+      if (plAll) {
+        state.playersLeague = '';
+        localStorage.removeItem('cahl-players-league');
+        await renderPlayers();
+        return;
+      }
+      const plDay = e.target.closest('[data-pl-day]');
+      if (plDay) {
+        state.playersDay = plDay.dataset.plDay;
+        await renderPlayers();
+        return;
+      }
+      const plLid = e.target.closest('[data-pl-lid]');
+      if (plLid) {
+        state.playersLeague = plLid.dataset.plLid;
+        localStorage.setItem('cahl-players-league', state.playersLeague);
+        const l = state.leagues.find(x => x.id === state.playersLeague);
+        if (l) state.playersDay = leagueDay(l.name);
+        await renderPlayers();
+        return;
+      }
+
       const chg = e.target.closest('[data-change-league]');
       if (chg) {
         state.leagueId = '';
