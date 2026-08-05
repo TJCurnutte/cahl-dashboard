@@ -560,10 +560,17 @@ const $main = document.getElementById('main');
         if (!inLeague) state.teamId = '';
       }
 
-      // Reset sessions cache when the league changes
+      // Reset sessions/calendar/compare state when the league changes
       if (state._sessions && state._sessions.leagueId !== leagueId) {
         state._sessions = null;
         state.sessionDate = '';
+        state.calMonth = '';
+        state.calDay = '';
+      }
+      if (state._cmpLeague !== leagueId) {
+        state.cmpA = '';
+        state.cmpB = '';
+        state._cmpLeague = leagueId;
       }
 
       let html = `<h3 style="margin:18px 0 10px;color:var(--text)">${data.league_name} <span style="color:var(--muted);font-weight:400">${data.season}</span></h3>`;
@@ -575,6 +582,7 @@ const $main = document.getElementById('main');
         { key: 'Leaders', label: 'Leaders' },
         { key: 'Sessions', label: 'Game Nights' },
         { key: 'Calendar', label: 'Calendar' },
+        { key: 'Compare', label: 'Compare' },
       ];
       const active = localStorage.getItem('cahl-league-section') || 'Scores';
       sections.forEach(s => html += `<span class="pill ${s.key===active?'active':''}" data-sec="${s.key}" tabindex="0" role="button">${s.label}</span>`);
@@ -621,11 +629,17 @@ const $main = document.getElementById('main');
       html += '<div class="empty">Season calendar…</div>';
       html += '</div>';
 
+      // Compare: team vs team head-to-head + tale of the tape
+      html += '<div id="leagueSecCompare" class="league-sec" style="display:'+(active==='Compare'?'block':'none')+'">';
+      html += '<div class="empty">Pick two teams to compare…</div>';
+      html += '</div>';
+
       $content.innerHTML = html;
       animateNumbers($content);
 
       if (active === 'Sessions') loadLeagueSessions(leagueId);
       if (active === 'Calendar') loadLeagueCalendar(leagueId);
+      if (active === 'Compare') loadLeagueCompare(leagueId);
 
       $('.pill-row')?.addEventListener('click', e => {
         if (e.target.classList.contains('pill') && e.target.dataset.sec) {
@@ -635,6 +649,7 @@ const $main = document.getElementById('main');
           document.querySelectorAll('.league-sec').forEach(s => s.style.display = s.id === 'leagueSec' + sec ? 'block' : 'none');
           if (sec === 'Sessions') loadLeagueSessions(leagueId);
           if (sec === 'Calendar') loadLeagueCalendar(leagueId);
+          if (sec === 'Compare') loadLeagueCompare(leagueId);
         }
       });
     }
@@ -803,6 +818,147 @@ const $main = document.getElementById('main');
 
       $sec.innerHTML = html;
       animateNumbers($sec);
+    }
+
+    // ---- Team vs Team comparison ----
+    async function loadLeagueCompare(leagueId) {
+      const $sec = $('#leagueSecCompare');
+      if (!$sec) return;
+
+      if (!state.cmpA && state.teamId && state.teams.find(t => t.id === state.teamId)) state.cmpA = state.teamId;
+      if (!state.cmpA && state.teams.length) state.cmpA = state.teams[0].id;
+      if (!state.cmpB || state.cmpB === state.cmpA) {
+        const other = state.teams.find(t => t.id !== state.cmpA);
+        state.cmpB = other ? other.id : '';
+      }
+
+      let html = '<div class="cmp-picker">';
+      html += `<select id="cmpA" aria-label="Team A">${state.teams.map(t => `<option value="${t.id}" ${t.id===state.cmpA?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+      html += '<span class="t-vs">vs</span>';
+      html += `<select id="cmpB" aria-label="Team B">${state.teams.map(t => `<option value="${t.id}" ${t.id===state.cmpB?'selected':''}>${esc(t.name)}</option>`).join('')}</select>`;
+      html += '<button class="ghost small" id="cmpSwap" title="Swap teams" aria-label="Swap teams">\u21c4</button>';
+      html += '</div><div id="cmpContent"></div>';
+      $sec.innerHTML = html;
+
+      $('#cmpA').onchange = e => { state.cmpA = e.target.value; renderComparison(); };
+      $('#cmpB').onchange = e => { state.cmpB = e.target.value; renderComparison(); };
+      $('#cmpSwap').onclick = () => { const t = state.cmpA; state.cmpA = state.cmpB; state.cmpB = t; loadLeagueCompare(leagueId); };
+
+      await renderComparison();
+    }
+
+    function winProb(aS, bS) {
+      // Fun logistic blend of points% and per-game goal diff
+      const pa = (aS.pts || 0) / Math.max((aS.gp || 0) * 2, 1);
+      const pb = (bS.pts || 0) / Math.max((bS.gp || 0) * 2, 1);
+      const ga = ((aS.gf || 0) - (aS.ga || 0)) / Math.max(aS.gp || 1, 1);
+      const gb = ((bS.gf || 0) - (bS.ga || 0)) / Math.max(bS.gp || 1, 1);
+      const x = (pa - pb) * 2.2 + (ga - gb) * 0.35;
+      return 1 / (1 + Math.exp(-x));
+    }
+
+    async function renderComparison() {
+      const el = $('#cmpContent');
+      if (!el) return;
+      if (!state.cmpA || !state.cmpB || state.cmpA === state.cmpB) {
+        el.innerHTML = '<div class="empty">Pick two different teams to compare.</div>';
+        return;
+      }
+      el.innerHTML = skeletonHtml(3);
+      const [a, b] = await Promise.all([api(`/api/team/${state.cmpA}`), api(`/api/team/${state.cmpB}`)]);
+      if (a.error || b.error) { el.innerHTML = '<div class="error">Failed to load one of the teams.</div>'; return; }
+
+      const aName = a.overview.team_name, bName = b.overview.team_name;
+      const aS = a.standings.find(s => s.team_id === state.cmpA) || {};
+      const bS = b.standings.find(s => s.team_id === state.cmpB) || {};
+      const aRank = a.standings.findIndex(s => s.team_id === state.cmpA) + 1;
+      const bRank = b.standings.findIndex(s => s.team_id === state.cmpB) + 1;
+      const aForm = a.form || {}, bForm = b.form || {};
+
+      // Head-to-head from A's schedule (meetings appear on both schedules)
+      const todayK = dateKey(new Date());
+      const meetings = a.schedule.filter(g => g.home_id === state.cmpB || g.away_id === state.cmpB);
+      const past = meetings.filter(g => { const dt = parseGameDate(g.date); return dt && dateKey(dt) <= todayK && g.played; });
+      const upcoming = meetings.filter(g => { const dt = parseGameDate(g.date); return dt && dateKey(dt) > todayK; });
+
+      let aw = 0, bw = 0, ties = 0;
+      past.forEach(g => {
+        const us = g.home_id === state.cmpA ? g.home_score : g.away_score;
+        const them = g.home_id === state.cmpA ? g.away_score : g.home_score;
+        if (us > them) aw++; else if (us < them) bw++; else ties++;
+      });
+
+      let html = `<div class="cmp-title"><span class="cmp-team-a link" onclick="selectTeam('${state.cmpA}')">${esc(aName)}</span><span class="t-vs">vs</span><span class="cmp-team-b link" onclick="selectTeam('${state.cmpB}')">${esc(bName)}</span></div>`;
+
+      // Head-to-head card
+      html += '<div class="card cmp-card"><h3>Head to Head</h3>';
+      if (past.length) {
+        html += `<div class="cmp-h2h-record">${aw}\u2013${bw}${ties ? '\u2013' + ties : ''} <span class="picker-hint" style="display:inline;margin:0">this season</span></div>`;
+        html += past.map(g => {
+          const us = g.home_id === state.cmpA ? g.home_score : g.away_score;
+          const them = g.home_id === state.cmpA ? g.away_score : g.home_score;
+          const res = us > them ? 'w' : (us < them ? 'l' : 't');
+          return `<div class="cmp-h2h-item"><span class="form-chip ${res}">${res.toUpperCase()}</span><span class="cmp-h2h-score">${us}\u2013${them}</span><span class="cmp-h2h-date">${esc(g.date)}${g.score_sheet ? ` <a class="link" href="${g.score_sheet}" target="_blank" rel="noopener" title="Score sheet">\u2197</a>` : ''}</span></div>`;
+        }).join('');
+      } else {
+        html += '<div class="empty">No meetings yet this season.</div>';
+      }
+      if (upcoming.length) {
+        const g = upcoming[0];
+        html += `<div class="picker-hint" style="margin-top:8px">Next meeting: <b>${esc(g.date)}</b> ${fmtTime(g.time)} \u00b7 ${esc(g.facility || '')}</div>`;
+      }
+      html += '</div>';
+
+      // Tale of the tape
+      const rows = [
+        { label: 'Rank', a: aRank ? `${aRank}${aRank===1?'st':aRank===2?'nd':aRank===3?'rd':'th'}` : '-', b: bRank ? `${bRank}${bRank===1?'st':bRank===2?'nd':bRank===3?'rd':'th'}` : '-', av: -aRank, bv: -bRank, better: 'high' },
+        { label: 'Points', a: aS.pts ?? '-', b: bS.pts ?? '-', av: aS.pts ?? 0, bv: bS.pts ?? 0, better: 'high' },
+        { label: 'Record', a: aForm.record || '-', b: bForm.record || '-', av: null, bv: null, better: null },
+        { label: 'Win %', a: aForm.played ? Math.round(aForm.win_pct * 100) + '%' : '-', b: bForm.played ? Math.round(bForm.win_pct * 100) + '%' : '-', av: aForm.win_pct || 0, bv: bForm.win_pct || 0, better: 'high' },
+        { label: 'Goals For', a: aS.gf ?? '-', b: bS.gf ?? '-', av: aS.gf ?? 0, bv: bS.gf ?? 0, better: 'high' },
+        { label: 'Goals Against', a: aS.ga ?? '-', b: bS.ga ?? '-', av: aS.ga ?? 0, bv: bS.ga ?? 0, better: 'low' },
+        { label: 'Goal Diff', a: (aForm.goal_diff > 0 ? '+' : '') + (aForm.goal_diff ?? 0), b: (bForm.goal_diff > 0 ? '+' : '') + (bForm.goal_diff ?? 0), av: aForm.goal_diff ?? 0, bv: bForm.goal_diff ?? 0, better: 'high' },
+        { label: 'Home', a: aForm.home_record || '-', b: bForm.home_record || '-', av: null, bv: null, better: null },
+        { label: 'Away', a: aForm.away_record || '-', b: bForm.away_record || '-', av: null, bv: null, better: null },
+        { label: 'Streak', a: aForm.streak || '-', b: bForm.streak || '-', av: null, bv: null, better: null },
+      ];
+      html += '<div class="card cmp-card"><h3>Tale of the Tape</h3><table class="tot"><thead><tr><th></th><th class="num cmp-team-a">' + esc(aName) + '</th><th class="num cmp-team-b">' + esc(bName) + '</th></tr></thead><tbody>';
+      rows.forEach(r => {
+        let aCls = '', bCls = '';
+        if (r.better && r.av !== null && r.bv !== null && r.av !== r.bv) {
+          const aWins = r.better === 'high' ? r.av > r.bv : r.av < r.bv;
+          if (aWins) aCls = ' class="tot-win num"'; else bCls = ' class="tot-win num"';
+        }
+        html += `<tr><td>${r.label}</td><td class="num${aCls ? ' tot-win' : ''}">${r.a}</td><td class="num${bCls ? ' tot-win' : ''}">${r.b}</td></tr>`;
+      });
+      html += '</tbody></table></div>';
+
+      // Fancied bar
+      const p = winProb(aS, bS);
+      const pctA = Math.round(p * 100), pctB = 100 - pctA;
+      html += `<div class="card cmp-card"><h3>Fancied (for fun)</h3>
+        <div class="prob-labels"><span class="cmp-team-a">${esc(aName)} ${pctA}%</span><span class="cmp-team-b">${pctB}% ${esc(bName)}</span></div>
+        <div class="prob-bar"><div class="prob-a" style="width:${pctA}%"></div><div class="prob-b" style="width:${pctB}%"></div></div>
+        <div class="picker-hint">Based on points % and goal differential — not science.</div>
+      </div>`;
+
+      // Top players + goalies side by side
+      html += '<div class="cmp-grid">';
+      html += '<div class="card cmp-card"><h3>Top Scorers \u00b7 ' + esc(aName) + '</h3><table><tbody>' +
+        (a.overview.team_leaders.points || []).slice(0, 3).map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.points} pts</td></tr>`).join('') + '</tbody></table></div>';
+      html += '<div class="card cmp-card"><h3>Top Scorers \u00b7 ' + esc(bName) + '</h3><table><tbody>' +
+        (b.overview.team_leaders.points || []).slice(0, 3).map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.points} pts</td></tr>`).join('') + '</tbody></table></div>';
+      const ga = (a.roster.goalies || [])[0], gb = (b.roster.goalies || [])[0];
+      if (ga || gb) {
+        html += '<div class="card cmp-card"><h3>Goalie \u00b7 ' + esc(aName) + '</h3>' +
+          (ga ? `<table><tbody><tr><td>${esc(ga.name)}</td><td class="num">${ga.w}-${ga.l}-${ga.otl}</td><td class="num">${typeof ga.gaa === 'number' ? ga.gaa.toFixed(1) : ga.gaa} GAA</td></tr></tbody></table>` : '<div class="empty">No goalie stats</div>') + '</div>';
+        html += '<div class="card cmp-card"><h3>Goalie \u00b7 ' + esc(bName) + '</h3>' +
+          (gb ? `<table><tbody><tr><td>${esc(gb.name)}</td><td class="num">${gb.w}-${gb.l}-${gb.otl}</td><td class="num">${typeof gb.gaa === 'number' ? gb.gaa.toFixed(1) : gb.gaa} GAA</td></tr></tbody></table>` : '<div class="empty">No goalie stats</div>') + '</div>';
+      }
+      html += '</div>';
+
+      el.innerHTML = html;
+      animateNumbers(el);
     }
 
     async function renderTeam(refresh) {

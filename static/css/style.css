@@ -1110,6 +1110,100 @@ nav a.active, .nav-link.active {
 }
 
 /* ============================================================
+   Team vs Team comparison
+   ============================================================ */
+
+.cmp-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.cmp-picker select { margin-bottom: 0; flex: 1; min-width: 0; }
+
+.cmp-picker button { flex: 0 0 auto; }
+
+.cmp-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  text-align: center;
+  flex-wrap: wrap;
+}
+
+.cmp-team-a { color: var(--accent); }
+.cmp-team-b { color: var(--accent-2); }
+
+.cmp-card { margin-bottom: 12px; }
+
+.cmp-h2h-record {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 8px;
+}
+
+.cmp-h2h-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.cmp-h2h-item:last-child { border-bottom: none; }
+
+.cmp-h2h-score { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.cmp-h2h-date { color: var(--muted); font-size: 12.5px; }
+
+.tot td, .tot th { white-space: nowrap; }
+.tot td:first-child, .tot th:first-child { white-space: normal; }
+
+.tot-win {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.prob-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  gap: 10px;
+}
+
+.prob-bar {
+  display: flex;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--border);
+}
+
+.prob-a { background: var(--accent); transition: width var(--t-med) var(--ease); }
+.prob-b { background: var(--accent-2); transition: width var(--t-med) var(--ease); }
+
+.cmp-grid { display: flex; flex-direction: column; }
+
+@media (min-width: 768px) {
+  .cmp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+}
+
+/* ============================================================
    Hero card (My Team on Today), team head, toast, a11y helpers
    ============================================================ */
 

@@ -723,6 +723,14 @@ def parse_team_standings(team_id):
     if err:
         return None, err
 
+    h1 = soup.find("h1")
+    team_name = _text(h1) if h1 else ""
+    team_name_core = team_name.replace(" Hockey", "").strip()
+
+    def _is_current_team(name):
+        norm = name.lower().strip().replace(" hockey", "")
+        return norm == team_name_core.lower() or name == team_name
+
     standings = []
     table = soup.find("table", class_=re.compile("table"))
     if table:
@@ -732,9 +740,10 @@ def parse_team_standings(team_id):
             if len(cells) < 8:
                 continue
             team_link = cells[0].find("a", href=True)
+            name = _text(team_link) if team_link else _text(cells[0])
             standings.append({
-                "team": _text(team_link) if team_link else _text(cells[0]),
-                "team_id": _team_id(team_link["href"]) if team_link else None,
+                "team": name,
+                "team_id": _team_id(team_link["href"]) if team_link else (team_id if _is_current_team(name) else None),
                 "gp": _score_to_int(_text(cells[1])),
                 "w": _score_to_int(_text(cells[2])),
                 "l": _score_to_int(_text(cells[3])),
