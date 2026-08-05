@@ -735,6 +735,84 @@ def _parse_player_history_soup(soup):
     return {"name": name, "history": history}
 
 
+def compute_team_form(games, team_id):
+    """Derive a team's season record, form, and streaks from its schedule.
+
+    The schedule page is already in chronological order, so played games in
+    list order == game order. Results are from the team's perspective.
+    """
+    results = []
+    timeline = []
+    home_w = home_l = away_w = away_l = 0
+    gf = ga = 0
+
+    for g in games:
+        if not g.get("played"):
+            continue
+        if g.get("home_id") == team_id:
+            us, them, loc, opp = g["home_score"], g["away_score"], "H", g.get("away", "")
+        elif g.get("away_id") == team_id:
+            us, them, loc, opp = g["away_score"], g["home_score"], "A", g.get("home", "")
+        else:
+            continue
+
+        if us > them:
+            res = "W"
+        elif us < them:
+            res = "L"
+        else:
+            res = "T"
+
+        results.append(res)
+        timeline.append({
+            "result": res,
+            "score": f"{us}-{them}",
+            "location": loc,
+            "opponent": opp,
+            "date": g.get("date", ""),
+        })
+        gf += us
+        ga += them
+        if loc == "H":
+            home_w += res == "W"
+            home_l += res != "W"
+        else:
+            away_w += res == "W"
+            away_l += res != "W"
+
+    wins = results.count("W")
+    losses = results.count("L")
+    ties = results.count("T")
+
+    streak_type = streak_len = None
+    if results:
+        streak_type = results[-1]
+        streak_len = 0
+        for r in reversed(results):
+            if r == streak_type:
+                streak_len += 1
+            else:
+                break
+
+    played = len(results)
+    return {
+        "played": played,
+        "wins": wins,
+        "losses": losses,
+        "ties": ties,
+        "record": f"{wins}-{losses}-{ties}",
+        "win_pct": round(wins / played, 3) if played else 0,
+        "gf": gf,
+        "ga": ga,
+        "goal_diff": gf - ga,
+        "home_record": f"{home_w}-{home_l}",
+        "away_record": f"{away_w}-{away_l}",
+        "form": results[-5:],
+        "streak": f"{streak_type}{streak_len}" if streak_type else "",
+        "timeline": timeline,
+    }
+
+
 def parse_player_history(team_id, player_id):
     soup, err = get_soup(f"/team/player_history.cfm?TeamID={team_id}&PlayerID={player_id}")
     if err:

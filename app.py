@@ -66,6 +66,7 @@ def team(team_id):
         "schedule": sched,
         "stats": stats,
         "standings": stand,
+        "form": scraper.compute_team_form(sched or [], team_id),
     })
 
 
