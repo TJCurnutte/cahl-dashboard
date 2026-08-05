@@ -1,7 +1,7 @@
 import os
 import socket
 import concurrent.futures
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 import scraper
 
@@ -67,29 +67,76 @@ def league(league_id):
 @app.route("/api/team/<team_id>")
 def team(team_id):
     # Fetch team sub-pages in parallel to keep the dashboard snappy.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
         f_over = ex.submit(scraper.parse_team_overview, team_id)
         f_sched = ex.submit(scraper.parse_team_schedule, team_id)
         f_stats = ex.submit(scraper.parse_team_stats, team_id)
         f_stand = ex.submit(scraper.parse_team_standings, team_id)
+        f_sessions = ex.submit(_sessions_for_team, team_id)
 
         over, e1 = f_over.result()
         sched, e2 = f_sched.result()
         stats, e3 = f_stats.result()
         stand, e4 = f_stand.result()
+        sessions_data, e5 = f_sessions.result()
 
     err = e1 or e2 or e3 or e4
     if err:
         return jsonify({"error": err}), 502
 
     team_row = next((s for s in (stand or []) if s.get("team_id") == team_id), None)
+
+    race = {}
+    team_race = None
+    playoffs = []
+    if not e5 and sessions_data:
+        cutoff = sessions_data.get("playoff_cutoff")
+        race = scraper.compute_playoff_race(stand or [], len(sched or []), cutoff)
+        team_race = race.get(team_id)
+        playoffs = sessions_data.get("playoffs", [])
+
     return jsonify({
         "overview": over,
         "schedule": sched,
         "roster": stats,
         "standings": stand,
         "form": scraper.compute_team_form(sched or [], team_id, team_row),
+        "race": team_race,
+        "playoffs": playoffs,
     })
+
+
+def _all_teams_cached():
+    """The /api/teams aggregate, using its 5-minute cache."""
+    import time
+    now = time.time()
+    if _TEAMS_CACHE["data"] is not None and now - _TEAMS_CACHE["ts"] < _TEAMS_TTL:
+        return _TEAMS_CACHE["data"], None
+    data, err = scraper.parse_all_teams()
+    if err:
+        return None, err
+    _TEAMS_CACHE["data"] = data
+    _TEAMS_CACHE["ts"] = now
+    return data, None
+
+
+def _sessions_for_team(team_id):
+    """Sessions for the team's league (for race calc); league found via the teams cache."""
+    teams_data, err = _all_teams_cached()
+    if err:
+        return None, err
+    match = next((t for t in teams_data if t["id"] == team_id), None)
+    if not match:
+        return None, "league not found for team"
+    league_id = match["league_id"]
+    sessions_data, e2 = scraper.parse_league_sessions(league_id)
+    if e2:
+        return None, e2
+    dash, e3 = scraper.parse_dashboard(league_id)
+    if not e3:
+        sessions_data["playoffs"] = dash.get("playoffs", [])
+        sessions_data["playoff_cutoff"] = dash.get("playoff_cutoff")
+    return sessions_data, None
 
 
 _TEAMS_CACHE = {"data": None, "ts": 0}
@@ -212,6 +259,23 @@ def sessions(league_id):
 def player(team_id, player_id):
     data, err = scraper.parse_player_history(team_id, player_id)
     return _jsonify(data, err)
+
+
+@app.route("/api/game-log/<team_id>")
+def game_log(team_id):
+    """Per-game G/A/Pts/PIM log for one player, built from score sheets."""
+    from urllib.parse import unquote
+    player = unquote(request.args.get("player", "")).strip()
+    team_name = unquote(request.args.get("team", "")).strip()
+    if not player or not team_name:
+        return jsonify({"error": "player and team query params required"}), 400
+    sched, err = scraper.parse_team_schedule(team_id)
+    if err:
+        return jsonify({"error": err}), 502
+    entries, err2 = scraper.compute_player_game_log(sched or [], player, team_name)
+    if err2:
+        return jsonify({"error": err2}), 502
+    return jsonify({"player": player, "team": team_name, "games": entries})
 
 
 @app.route("/api/player-token/<token>")

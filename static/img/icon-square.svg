@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="iconBg" cx="42%" cy="32%" r="85%">
+      <stop offset="0%" stop-color="#0a3d7d"/>
+      <stop offset="55%" stop-color="#002654"/>
+      <stop offset="100%" stop-color="#001533"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#iconBg)"/>
+  <g transform="translate(256 256) scale(0.62) translate(-259.5 -150)">
+    <ellipse cx="259.5" cy="150" rx="244" ry="134" fill="none" stroke="#c9d3df" stroke-width="14"/>
+    <ellipse cx="259.5" cy="150" rx="230" ry="120" fill="none" stroke="#5d6b7d" stroke-width="4" opacity="0.6"/>
+  </g>
+  <g transform="translate(256 268) scale(0.62) translate(-259.5 -150)">
+    <ellipse cx="259" cy="150" rx="244" ry="134" fill="url(#iconBg)"/>
+    <ellipse cx="259" cy="150" rx="244" ry="134" fill="none" stroke="#e8edf4" stroke-width="10"/>
+  </g>
+  <text x="256" y="252" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="76" font-weight="800" font-style="italic" letter-spacing="2" fill="#f4f8ff" stroke="#7e93ad" stroke-width="1.5">CHILLER</text>
+  <text x="256" y="308" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="700" font-style="italic" letter-spacing="6" fill="#dce6f2">ICE RINKS</text>
+  <rect x="166" y="322" width="180" height="6" rx="3" fill="#2ea3ff"/>
+</svg>

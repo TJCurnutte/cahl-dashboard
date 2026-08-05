@@ -1,0 +1,17 @@
+{
+  "name": "CAHL Dashboard",
+  "short_name": "CAHL",
+  "description": "Live scores, standings, rosters, and player stats for Chiller Adult Hockey League",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#002654",
+  "theme_color": "#002654",
+  "id": "cahl-dashboard",
+  "icons": [
+    { "src": "/static/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

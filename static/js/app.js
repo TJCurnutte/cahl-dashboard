@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 24;
+const JS_VERSION = 25;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -353,7 +353,7 @@ const $main = document.getElementById('main');
         box.innerHTML = '<div class="typeahead-item muted">No players match</div>';
       } else {
         box.innerHTML = matches.map(p =>
-          `<div class="typeahead-item" role="option" data-ptoken="${p.token || ''}"><span class="ta-name">${esc(p.name)}</span><span class="ta-league">${esc(p.team)} · ${esc(p.position || '')}</span></div>`
+          `<div class="typeahead-item" role="option" data-ptoken="${p.token || ''}" data-tid="${p.team_id}" data-tname="${esc(p.team)}" data-pname="${esc(p.name)}"><span class="ta-name">${esc(p.name)}</span><span class="ta-league">${esc(p.team)} · ${esc(p.position || '')}</span></div>`
         ).join('');
       }
       paIndex = -1;
@@ -800,6 +800,28 @@ const $main = document.getElementById('main');
       if (state.leagueId) await loadLeagueContent(state.leagueId, refresh);
     }
 
+    function playoffsHtml(playoffs) {
+      let html = '';
+      playoffs.forEach(r => {
+        html += `<div class="card cmp-card"><h3>${esc(r.round)}</h3>`;
+        r.games.forEach(g => {
+          const homeW = g.played && g.home_score > g.away_score;
+          const awayW = g.played && g.away_score > g.home_score;
+          const mine = state.teamId && (g.home_id === state.teamId || g.away_id === state.teamId);
+          html += `<div class="po-game${mine ? ' po-mine' : ''}">
+            <div class="po-teams">
+              <span class="po-team ${homeW ? 'po-win' : ''} ${g.home_id ? 'link' : 'po-tbd'}" ${g.home_id ? `onclick="selectTeam('${g.home_id}')"` : ''}>${esc(g.home)}</span>
+              ${g.played ? `<span class="po-score">${g.home_score}\u2013${g.away_score}</span>` : '<span class="t-vs">vs</span>'}
+              <span class="po-team ${awayW ? 'po-win' : ''} ${g.away_id ? 'link' : 'po-tbd'}" ${g.away_id ? `onclick="selectTeam('${g.away_id}')"` : ''}>${esc(g.away)}</span>
+            </div>
+            <div class="meta">${esc(g.date)} \u00b7 ${fmtTime(g.time)}${g.facility ? ' \u00b7 ' + esc(g.facility) : ''}</div>
+          </div>`;
+        });
+        html += '</div>';
+      });
+      return html;
+    }
+
     async function loadLeagueContent(leagueId, refresh=false) {
       const $content = $('#leagueContent');
       $content.innerHTML = skeletonHtml(3);
@@ -829,6 +851,7 @@ const $main = document.getElementById('main');
       html += '<div class="pill-row">';
       const sections = [
         { key: 'Scores', label: 'Scores' },
+        ...(data.playoffs && data.playoffs.length ? [{ key: 'Playoffs', label: 'Playoffs' }] : []),
         { key: 'Standings', label: 'Standings' },
         { key: 'Leaders', label: 'Leaders' },
         { key: 'Sessions', label: 'Game Nights' },
@@ -839,6 +862,11 @@ const $main = document.getElementById('main');
       sections.forEach(s => html += `<span class="pill ${s.key===active?'active':''}" data-sec="${s.key}" tabindex="0" role="button">${s.label}</span>`);
       html += '</div>';
 
+      if (data.playoffs && data.playoffs.length) {
+        html += '<div id="leagueSecPlayoffs" class="league-sec" style="display:'+(active==='Playoffs'?'block':'none')+'">';
+        html += playoffsHtml(data.playoffs);
+        html += '</div>';
+      }
       html += '<div id="leagueSecScores" class="league-sec" style="display:'+(active==='Scores'?'block':'none')+'">';
       html += '<h3>Latest Scores</h3>';
       if (!data.recent.length) html += '<div class="empty">No recent scores yet.</div>';
@@ -1265,14 +1293,31 @@ const $main = document.getElementById('main');
       const rankSuffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
       const icalUrl = `https://www.chillerstats.com/team/calendar_export.cfm?TeamID=${teamId}`;
 
+      // Playoff-race badge from the magic-number calculator
+      const raceBadge = (() => {
+        const r = data.race;
+        if (!r) return '';
+        if (r.status === 'clinched') return '<span class="race-badge clinched">Clinched</span>';
+        if (r.status === 'eliminated') return '<span class="race-badge eliminated">Eliminated</span>';
+        if (r.status === 'playoffs') return '<span class="race-badge playoffs">Playoffs</span>';
+        if (r.status === 'help') return '<span class="race-badge help">Needs help</span>';
+        if (r.status === 'alive' && r.magic > 0) return `<span class="race-badge alive">Magic # ${r.magic}</span>`;
+        return '';
+      })();
+
       let html = `<div class="team-head">
         <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
         <div class="team-head-actions">
+          ${raceBadge}
           ${rank ? `<span class="hero-rank">${rank}${rankSuffix} of ${standings.length}</span>` : ''}
           <a class="ghost small btn-link" href="${icalUrl}" target="_blank" rel="noopener" title="Subscribe to this team's schedule in your calendar">iCal</a>
           <button class="ghost small" onclick="shareTeamResult('${teamId}')" title="Copy last result to share">Share</button>
         </div>
       </div>`;
+
+      if (data.playoffs && data.playoffs.length) {
+        html += playoffsHtml(data.playoffs);
+      }
 
       // Season record / historical wins (derived from full schedule)
       const form = data.form || {};
@@ -1348,7 +1393,7 @@ const $main = document.getElementById('main');
       roster.sections.forEach(sec => {
         html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
         html += skaterHead + sec.players.slice().sort((a, b) => b.pts - a.pts).map(p => `
-          <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+          <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
             <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td>
             <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim}</td>
@@ -1359,7 +1404,7 @@ const $main = document.getElementById('main');
         html += '<div class="form-chips-label">Goalies</div>';
         html += '<table><thead><tr><th>#</th><th>Goalie</th><th class="num">GP</th><th class="num">W</th><th class="num">L</th><th class="num">OTL</th><th class="num">Win%</th><th class="num">GA</th><th class="num">GAA</th></tr></thead><tbody>';
         html += roster.goalies.map(p => `
-          <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+          <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
             <td class="num">${p.gp}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
             <td class="num">${p.gp ? Math.round((p.w / p.gp) * 100) + '%' : '-'}</td>
@@ -1417,6 +1462,20 @@ const $main = document.getElementById('main');
       setMainHtml(html);
     }
 
+    // Unified player opener: career profile + game log when team context exists
+    window.openPlayer = (opts) => {
+      if (!opts) return;
+      state.profileReturn = state.tab;
+      state.profileCtx = {
+        teamId: opts.teamId || '',
+        teamName: opts.teamName || '',
+        playerName: opts.playerName || '',
+      };
+      if (opts.playerId && opts.teamId) renderPlayerProfile(opts.teamId, opts.playerId, null);
+      else if (opts.token) renderPlayerProfile(null, null, opts.token);
+      else showToast('No profile link for that player');
+    };
+
     async function renderPlayerProfile(teamId, playerId, token) {
       $main.innerHTML = skeletonHtml(3);
       const path = token ? `/api/player-token/${encodeURIComponent(token)}` : `/api/player/${teamId}/${playerId}`;
@@ -1463,6 +1522,39 @@ const $main = document.getElementById('main');
       const backLabels = { today: 'Today', league: 'League', team: 'Team', players: 'Leaders', analytics: 'Analytics' };
       html += `<button class="ghost" onclick="setTab('${backTab}')">\u2190 Back to ${backLabels[backTab] || 'Leaders'}</button>`;
       setMainHtml(html);
+
+      // Game log from official score sheets when we have team context
+      const ctx = state.profileCtx || {};
+      if (ctx.teamId && ctx.playerName && ctx.teamName) loadGameLogSection(ctx);
+    }
+
+    async function loadGameLogSection(ctx) {
+      const data = await api(`/api/game-log/${ctx.teamId}?player=${encodeURIComponent(ctx.playerName)}&team=${encodeURIComponent(ctx.teamName)}`);
+      if (data.error || !data.games || !data.games.length) return;
+
+      const totals = data.games.reduce((a, g) => {
+        a.g += g.g; a.a += g.a; a.pim += g.pim;
+        return a;
+      }, { g: 0, a: 0, pim: 0 });
+
+      let html = '<div class="card"><h3>Game Log \u00b7 This Season</h3>';
+      html += '<div class="picker-hint" style="margin:-6px 0 10px">From official score sheets \u2014 totals may differ from the league table if a sheet is incomplete</div>';
+      html += '<div class="stat-grid">' +
+        `<div class="stat-box"><div class="num">${data.games.length}</div><div class="label">Games</div></div>` +
+        `<div class="stat-box"><div class="num">${totals.g}</div><div class="label">Goals</div></div>` +
+        `<div class="stat-box"><div class="num">${totals.a}</div><div class="label">Assists</div></div>` +
+        `<div class="stat-box"><div class="num">${totals.g + totals.a}</div><div class="label">Points</div></div>` +
+        `<div class="stat-box"><div class="num">${totals.pim}</div><div class="label">PIM</div></div>` +
+        '</div>';
+      html += '<table><thead><tr><th>Date</th><th>Opponent</th><th class="num">Result</th><th class="num">Score</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">PIM</th><th class="num">ESG</th><th class="num">PPG</th><th class="num">SHG</th></tr></thead><tbody>';
+      html += data.games.slice().reverse().map(g => `
+        <tr><td>${esc(g.date)}</td><td>${g.home_away} ${esc(g.opponent)}</td>
+        <td class="num"><span class="form-chip ${g.result.toLowerCase()}" aria-label="${chipLabel(g.result.toLowerCase())}">${g.result}</span></td>
+        <td class="num">${g.score}</td><td class="num">${g.g}</td><td class="num">${g.a}</td><td class="num">${g.pts}</td><td class="num">${g.pim}</td>
+        <td class="num">${g.esg}</td><td class="num">${g.ppg}</td><td class="num">${g.shg}</td></tr>`).join('');
+      html += '</tbody></table></div>';
+      $main.insertAdjacentHTML('beforeend', html);
+      a11yFix($main);
     }
 
     async function renderAnalytics(refresh) {
@@ -1631,7 +1723,12 @@ const $main = document.getElementById('main');
         if (box) (isTeam ? taClose : paClose)(input, box);
         input.value = '';
         if (isTeam) pickSearchedTeam(pick.dataset.tid, pick.dataset.lid);
-        else pickSearchedPlayer(pick.dataset.ptoken);
+        else openPlayer({
+          token: pick.dataset.ptoken,
+          teamId: pick.dataset.tid,
+          teamName: pick.dataset.tname,
+          playerName: pick.dataset.pname,
+        });
       } else if (e.key === 'Escape') {
         if (box) (isTeam ? taClose : paClose)(input, box);
         input.blur();
@@ -1667,7 +1764,24 @@ const $main = document.getElementById('main');
         const box = $('#playerSuggest');
         if (input) input.value = '';
         if (box) paClose(input, box);
-        pickSearchedPlayer(paItem.dataset.ptoken);
+        openPlayer({
+          token: paItem.dataset.ptoken,
+          teamId: paItem.dataset.tid,
+          teamName: paItem.dataset.tname,
+          playerName: paItem.dataset.pname,
+        });
+        return;
+      }
+
+      // Roster row → profile with game-log context
+      const rp = e.target.closest('.roster-player');
+      if (rp) {
+        openPlayer({
+          token: rp.dataset.token,
+          teamId: rp.dataset.tid,
+          teamName: rp.dataset.tname,
+          playerName: rp.dataset.pname,
+        });
         return;
       }
 

@@ -442,14 +442,54 @@ def parse_dashboard(league_id):
                     "away_final": away_final,
                 })
 
-    # Playoffs
+    # Playoffs — parse every round table (ROUND 1, ROUND 2, CHAMPIONSHIP, ...)
     playoffs = []
-    playoff_tables = []
-    for thead in soup.find_all("thead"):
-        round_th = thead.find("th", colspan=re.compile("^\d+$"))
-        if round_th and round_th.get_text(strip=True) in ("ROUND 1", "ROUND 2", "CHAMPIONSHIP", "SEMI-FINAL", "FINAL"):
-            playoff_tables.append(round_th.get_text(strip=True))
-    # TODO: parse playoff games if needed
+    for table in soup.find_all("table"):
+        divider = table.find("th", colspan=re.compile(r"^\d+$"))
+        if not divider or not re.search(r"ROUND|SEMI|FINAL|CHAMPIONSHIP", divider.get_text(), re.I):
+            continue
+        round_name = divider.get_text(strip=True)
+        games = []
+        tbody = table.find("tbody")
+        for row in (tbody.find_all("tr") if tbody else []):
+            cells = row.find_all("td")
+            if len(cells) < 5:
+                continue
+            date = _text(cells[0])
+            gametime = _text(cells[1])
+            # Matchup rows only (date + time) — skips standings rows that bleed in
+            if not re.search(r"[A-Za-z]+ \d+", date) or not re.match(r"\d{1,2}:\d{2}", gametime):
+                continue
+            home_link = cells[3].find("a", href=True)
+            away_link = cells[4].find("a", href=True)
+            home = _text(home_link) if home_link else _text(cells[3])
+            away = _text(away_link) if away_link else _text(cells[4])
+            # Optional 6th score column ("5 - 3") once a game is played
+            home_score = away_score = None
+            if len(cells) > 5:
+                m = re.match(r"(\d+)\s*-\s*(\d+)", _text(cells[5]))
+                if m:
+                    home_score, away_score = int(m.group(1)), int(m.group(2))
+            games.append({
+                "date": date,
+                "time": gametime,
+                "facility": _text(cells[2]),
+                "home": home,
+                "home_id": _team_id(home_link["href"]) if home_link else None,
+                "away": away,
+                "away_id": _team_id(away_link["href"]) if away_link else None,
+                "home_score": home_score,
+                "away_score": away_score,
+                "played": home_score is not None,
+            })
+        if games:
+            playoffs.append({"round": round_name, "games": games})
+
+    # Playoff qualifier note, e.g. "*The top 6 teams will qualify for playoffs*"
+    playoff_cutoff = None
+    m = re.search(r"top (\d+) teams? will qualify", soup.get_text(" ", strip=True), re.I)
+    if m:
+        playoff_cutoff = int(m.group(1))
 
     return {
         "league_name": league_name,
@@ -459,6 +499,7 @@ def parse_dashboard(league_id):
         "upcoming": upcoming,
         "recent": recent,
         "playoffs": playoffs,
+        "playoff_cutoff": playoff_cutoff,
     }, None
 
 
@@ -909,6 +950,176 @@ def _normalize_session_date(s):
     return s
 
 
+def _dedupe_name(nm):
+    """Score-sheet name cells repeat the name twice concatenated, optionally with a
+    captain letter suffix: 'Austin GrycaAustin Gryca', 'Gianni EvangelistiGianni EvangelistiC'."""
+    nm = nm.strip()
+    n = len(nm)
+    for k in range(n // 2, 1, -1):
+        if nm[:k] == nm[k:2 * k]:
+            rest = nm[2 * k:]
+            if not rest or (len(rest) == 1 and rest.isalpha()):
+                return nm[:k]
+    return nm
+
+
+def parse_score_sheet(path):
+    """Parse a scoresheet_new.cfm page.
+
+    Returns {"roster": {jersey: full_name},
+             "goals": [{team, scorer_jersey, assists:[jersey...], strength, time}],
+             "penalties": [{team, player_jersey, infraction, length, time}]}
+    """
+    soup, err = get_soup(path)
+    if err:
+        return None, err
+
+    roster = {}
+    goals = []
+    penalties = []
+
+    for table in soup.find_all("table"):
+        headers = [c.get_text(strip=True) for c in table.find_all("th")]
+        if headers[:2] == ["#", "Name"]:
+            for row in table.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 2:
+                    continue
+                num = _text(cells[0])
+                if not num.isdigit():
+                    continue
+                a = cells[1].find("a")
+                nm = _dedupe_name(_text(a) if a else _text(cells[1]))
+                roster[num] = nm
+        elif headers[:3] == ["P", "Team", "Goal"]:
+            for row in table.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 6:
+                    continue
+                scorer = _text(cells[2])  # "25 - Evangelisti"
+                assists_raw = _text(cells[3])  # "3 - Breslin" or "3 - Breslin, 24 - Steranko"
+                scorer_jersey = scorer.split("-")[0].strip() if "-" in scorer else ""
+                assists = [a.split("-")[0].strip() for a in assists_raw.split(",") if "-" in a]
+                goals.append({
+                    "team": _text(cells[1]),
+                    "scorer_jersey": scorer_jersey,
+                    "assists": assists,
+                    "strength": _text(cells[4]),
+                    "time": _text(cells[5]),
+                })
+        elif headers[:3] == ["P", "Team", "Player"]:
+            for row in table.find_all("tr"):
+                cells = row.find_all("td")
+                if len(cells) < 6:
+                    continue
+                player = _text(cells[2])
+                penalties.append({
+                    "team": _text(cells[1]),
+                    "player_jersey": player.split("-")[0].strip() if "-" in player else "",
+                    "infraction": _text(cells[3]),
+                    "length": _text(cells[4]),
+                    "time": _text(cells[5]),
+                })
+
+    return {"roster": roster, "goals": goals, "penalties": penalties}, None
+
+
+def compute_player_game_log(schedule, player_name, team_name, max_workers=8):
+    """Build a per-game log for one player from score sheets.
+
+    schedule: entries from parse_team_schedule (has date, opponent context, score_sheet).
+    player_name / team_name: strings to match. Returns a list of game entries,
+    oldest first, with g/a/pts/pim/strengths per game.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    target = player_name.lower().strip()
+    surname = target.split()[-1] if target else ""
+    entries = []
+
+    def fetch(game):
+        sheet = game.get("score_sheet")
+        if not sheet or not game.get("played"):
+            return
+        path = sheet.replace(BASE_URL, "")
+        data, e = parse_score_sheet(path)
+        if e or not data:
+            return
+        roster = data["roster"]
+        g = a = pim = 0
+        esg = ppg = shg = other = 0
+
+        exact_names = {(nm or "").lower().strip() for nm in roster.values()}
+        has_exact_anchor = target in exact_names
+
+        def name_matches(nm):
+            n = (nm or "").lower().strip()
+            if not n:
+                return False
+            if n == target:
+                return True
+            # Surname fallback only when the sheet has no exact-name anchor
+            # (prevents matching same-surname teammates, e.g. the Evangelistis)
+            return (not has_exact_anchor) and bool(surname) and n.endswith(surname)
+
+        def jersey_of(person_jersey):
+            return name_matches(roster.get(person_jersey, ""))
+
+        # Dressed = appears on either roster table in the sheet
+        dressed = any(name_matches(nm) for nm in roster.values())
+
+        for goal in data["goals"]:
+            if goal["team"].lower().strip() != team_name.lower().strip():
+                continue
+            if goal["scorer_jersey"] and jersey_of(goal["scorer_jersey"]):
+                g += 1
+                s = goal["strength"].lower()
+                if "pp" in s or "power" in s:
+                    ppg += 1
+                elif "sh" in s or "short" in s:
+                    shg += 1
+                elif "even" in s:
+                    esg += 1
+                else:
+                    other += 1
+            for aj in goal["assists"]:
+                if aj and jersey_of(aj):
+                    a += 1
+
+        for pen in data["penalties"]:
+            if pen["team"].lower().strip() != team_name.lower().strip():
+                continue
+            if pen["player_jersey"] and jersey_of(pen["player_jersey"]):
+                m = re.match(r"(\d+)", pen["length"])
+                pim += int(m.group(1)) if m else 2
+
+        # Include every game the player dressed for (even scoreless ones)
+        if dressed or g or a or pim:
+            is_home = game.get("home_id") and game.get("home", "").lower().strip() == team_name.lower().strip()
+            us = game["home_score"] if is_home else game["away_score"]
+            them = game["away_score"] if is_home else game["home_score"]
+            res = "W" if us > them else ("L" if us < them else "T")
+            entries.append({
+                "date": game["date"],
+                "opponent": game["away"] if is_home else game["home"],
+                "home_away": "vs" if is_home else "@",
+                "result": res,
+                "score": f"{us}-{them}",
+                "g": g,
+                "a": a,
+                "pts": g + a,
+                "pim": pim,
+                "esg": esg,
+                "ppg": ppg,
+                "shg": shg,
+            })
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(fetch, schedule))
+
+    return entries, None
+
+
 def parse_league_sessions(league_id, max_workers=8):
     """Aggregate every game in a league's season, grouped by date ("session").
 
@@ -989,7 +1200,52 @@ def parse_league_sessions(league_id, max_workers=8):
         "league_name": dash.get("league_name", ""),
         "season": dash.get("season", ""),
         "sessions": sessions,
+        "playoff_cutoff": dash.get("playoff_cutoff"),
     }, None
+
+
+def compute_playoff_race(standings, total_games, cutoff=None):
+    """Magic numbers: clinch/alive/needs-help/eliminated status per team.
+
+    standings: display-ordered rows with team_id, gp, pts (pts desc as shown).
+    total_games: scheduled regular-season games per team (balanced leagues).
+    cutoff: qualifiers (from the league's qualifier note), default 4.
+    Returns {team_id: {status, magic, remaining}} keyed by team_id.
+    """
+    if not standings:
+        return {}
+    cutoff = cutoff or 4
+    cutoff = min(cutoff, len(standings))
+
+    ordered = list(standings)
+    last_in = ordered[cutoff - 1]
+    first_out = ordered[cutoff] if cutoff < len(ordered) else None
+
+    race = {}
+    for s in ordered:
+        tid = s.get("team_id")
+        if not tid:
+            continue
+        remaining = max(0, total_games - s.get("gp", 0))
+        pts = s.get("pts", 0)
+        max_possible = pts + 2 * remaining
+
+        if remaining == 0:
+            status, magic = "playoffs", 0
+        elif first_out is None:
+            status, magic = "clinched", 0
+        else:
+            out_max = first_out.get("pts", 0) + 2 * max(0, total_games - first_out.get("gp", 0))
+            if pts > out_max:
+                status, magic = "clinched", 0
+            elif max_possible < last_in.get("pts", 0):
+                status, magic = "eliminated", 0
+            else:
+                magic = max(0, out_max + 1 - pts)
+                status = "alive" if magic <= 2 * remaining else "help"
+        race[tid] = {"status": status, "magic": magic, "remaining": remaining}
+
+    return race
 
 
 def compute_team_form(games, team_id, standings_row=None):
