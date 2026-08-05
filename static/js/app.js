@@ -914,7 +914,7 @@ const $main = document.getElementById('main');
         { label: 'Rank', a: aRank ? `${aRank}${aRank===1?'st':aRank===2?'nd':aRank===3?'rd':'th'}` : '-', b: bRank ? `${bRank}${bRank===1?'st':bRank===2?'nd':bRank===3?'rd':'th'}` : '-', av: -aRank, bv: -bRank, better: 'high' },
         { label: 'Points', a: aS.pts ?? '-', b: bS.pts ?? '-', av: aS.pts ?? 0, bv: bS.pts ?? 0, better: 'high' },
         { label: 'Record', a: aForm.record || '-', b: bForm.record || '-', av: null, bv: null, better: null },
-        { label: 'Win %', a: aForm.played ? Math.round(aForm.win_pct * 100) + '%' : '-', b: bForm.played ? Math.round(bForm.win_pct * 100) + '%' : '-', av: aForm.win_pct || 0, bv: bForm.win_pct || 0, better: 'high' },
+        { label: 'Pts %', a: aForm.played ? Math.round((aForm.pts_pct ?? aForm.win_pct) * 100) + '%' : '-', b: bForm.played ? Math.round((bForm.pts_pct ?? bForm.win_pct) * 100) + '%' : '-', av: aForm.pts_pct ?? aForm.win_pct ?? 0, bv: bForm.pts_pct ?? bForm.win_pct ?? 0, better: 'high' },
         { label: 'Goals For', a: aS.gf ?? '-', b: bS.gf ?? '-', av: aS.gf ?? 0, bv: bS.gf ?? 0, better: 'high' },
         { label: 'Goals Against', a: aS.ga ?? '-', b: bS.ga ?? '-', av: aS.ga ?? 0, bv: bS.ga ?? 0, better: 'low' },
         { label: 'Goal Diff', a: (aForm.goal_diff > 0 ? '+' : '') + (aForm.goal_diff ?? 0), b: (bForm.goal_diff > 0 ? '+' : '') + (bForm.goal_diff ?? 0), av: aForm.goal_diff ?? 0, bv: bForm.goal_diff ?? 0, better: 'high' },
@@ -1026,9 +1026,11 @@ const $main = document.getElementById('main');
       // Season record / historical wins (derived from full schedule)
       const form = data.form || {};
       if (form.played) {
-        const streakClass = form.streak && form.streak.startsWith('W') ? 'win' : (form.streak && form.streak.startsWith('L') ? 'loss' : 'tie');
+        const s = form.streak || '';
+        const streakClass = s.startsWith('W') ? 'win' : (s.startsWith('L') ? 'loss' : (s.startsWith('O') ? 'otl' : 'tie'));
         html += `<div class="record-row">
           <div class="stat-box"><div class="num">${form.record}</div><div class="label">Record</div></div>
+          <div class="stat-box"><div class="num">${form.points ?? '-'}</div><div class="label">Points</div></div>
           <div class="stat-box"><div class="num">${form.home_record}</div><div class="label">Home</div></div>
           <div class="stat-box"><div class="num">${form.away_record}</div><div class="label">Away</div></div>
           <div class="stat-box"><div class="num">${form.goal_diff > 0 ? '+' + form.goal_diff : form.goal_diff}</div><div class="label">Goal Diff</div></div>

@@ -941,16 +941,22 @@ def parse_league_sessions(league_id, max_workers=8):
     }, None
 
 
-def compute_team_form(games, team_id):
+def compute_team_form(games, team_id, standings_row=None):
     """Derive a team's season record, form, and streaks from its schedule.
 
     The schedule page is already in chronological order, so played games in
     list order == game order. Results are from the team's perspective.
+
+    Overtime losses matter in hockey: the standings table is authoritative for
+    W/L/OTL (points = 2*W + OTL). Final scores alone can't distinguish an OT
+    loss from a regulation loss, so we reconcile: mark 1-goal-margin losses as
+    OT losses until the count matches the standings OTL total. If no standings
+    row is supplied, records fall back to pure score-derived counts.
     """
     results = []
     timeline = []
-    home_w = home_l = away_w = away_l = 0
     gf = ga = 0
+    split = {"H": {"w": 0, "l": 0, "otl": 0}, "A": {"w": 0, "l": 0, "otl": 0}}
 
     for g in games:
         if not g.get("played"):
@@ -964,8 +970,10 @@ def compute_team_form(games, team_id):
 
         if us > them:
             res = "W"
+            split[loc]["w"] += 1
         elif us < them:
             res = "L"
+            split[loc]["l"] += 1
         else:
             res = "T"
 
@@ -973,22 +981,39 @@ def compute_team_form(games, team_id):
         timeline.append({
             "result": res,
             "score": f"{us}-{them}",
+            "margin": abs(us - them),
             "location": loc,
             "opponent": opp,
             "date": g.get("date", ""),
         })
         gf += us
         ga += them
-        if loc == "H":
-            home_w += res == "W"
-            home_l += res != "W"
-        else:
-            away_w += res == "W"
-            away_l += res != "W"
 
-    wins = results.count("W")
-    losses = results.count("L")
+    # Reconcile OTL against the authoritative standings row
+    otl_total = (standings_row or {}).get("otl", 0)
+    if otl_total:
+        loss_idx = [i for i, r in enumerate(results) if r == "L"]
+        # OT games are always decided by one goal — prefer 1-goal losses
+        loss_idx.sort(key=lambda i: (timeline[i]["margin"], i))
+        for i in loss_idx[: max(0, min(otl_total, len(loss_idx)))]:
+            results[i] = "OTL"
+            timeline[i]["result"] = "OTL"
+            loc = timeline[i]["location"]
+            split[loc]["l"] -= 1
+            split[loc]["otl"] += 1
+
+    if standings_row:
+        wins = standings_row.get("w", results.count("W"))
+        losses = standings_row.get("l", results.count("L"))
+        otl = otl_total
+    else:
+        wins = results.count("W")
+        losses = results.count("L")
+        otl = results.count("OTL")
     ties = results.count("T")
+    played = wins + losses + otl + ties
+    points = (standings_row or {}).get("pts", 2 * wins + otl + ties)
+    pts_pct = round(points / (2 * played), 3) if played else 0
 
     streak_type = streak_len = None
     if results:
@@ -1000,19 +1025,24 @@ def compute_team_form(games, team_id):
             else:
                 break
 
-    played = len(results)
+    def _split_rec(s):
+        return f"{s['w']}-{s['l']}-{s['otl']}" if s["otl"] else f"{s['w']}-{s['l']}"
+
     return {
         "played": played,
         "wins": wins,
         "losses": losses,
+        "otl": otl,
         "ties": ties,
-        "record": f"{wins}-{losses}-{ties}",
+        "record": f"{wins}-{losses}-{otl}",
+        "points": points,
+        "pts_pct": pts_pct,
         "win_pct": round(wins / played, 3) if played else 0,
         "gf": gf,
         "ga": ga,
         "goal_diff": gf - ga,
-        "home_record": f"{home_w}-{home_l}",
-        "away_record": f"{away_w}-{away_l}",
+        "home_record": _split_rec(split["H"]),
+        "away_record": _split_rec(split["A"]),
         "form": results[-5:],
         "streak": f"{streak_type}{streak_len}" if streak_type else "",
         "timeline": timeline,

@@ -691,6 +691,13 @@ td.num, .num { text-align: center; font-variant-numeric: tabular-nums; }
 .form-chip.w { background: rgba(21, 122, 76, 0.14); color: var(--win); border: 1px solid rgba(21, 122, 76, 0.35); }
 .form-chip.l { background: rgba(206, 17, 38, 0.10); color: var(--loss); border: 1px solid rgba(206, 17, 38, 0.30); }
 .form-chip.t { background: rgba(139, 152, 169, 0.15); color: var(--tie); border: 1px solid rgba(139, 152, 169, 0.35); }
+.form-chip.otl {
+  background: rgba(176, 125, 0, 0.14);
+  color: var(--warning);
+  border: 1px solid rgba(176, 125, 0, 0.35);
+  font-size: 9.5px;
+  width: 32px;
+}
 
 .streak-badge {
   display: inline-block;
@@ -703,6 +710,7 @@ td.num, .num { text-align: center; font-variant-numeric: tabular-nums; }
 
 .streak-badge.win  { background: rgba(21, 122, 76, 0.14); color: var(--win); border: 1px solid rgba(21, 122, 76, 0.35); }
 .streak-badge.loss { background: rgba(206, 17, 38, 0.10); color: var(--loss); border: 1px solid rgba(206, 17, 38, 0.30); }
+.streak-badge.otl  { background: rgba(176, 125, 0, 0.14); color: var(--warning); border: 1px solid rgba(176, 125, 0, 0.35); }
 .streak-badge.tie  { background: rgba(139, 152, 169, 0.15); color: var(--tie); border: 1px solid rgba(139, 152, 169, 0.35); }
 
 .timeline {
@@ -741,6 +749,7 @@ td.num, .num { text-align: center; font-variant-numeric: tabular-nums; }
 
 .tl-game.w { background: var(--win); box-shadow: 0 0 0 3px rgba(21, 122, 76, 0.18); }
 .tl-game.l { background: var(--loss); box-shadow: 0 0 0 3px rgba(206, 17, 38, 0.15); }
+.tl-game.otl { background: var(--warning); box-shadow: 0 0 0 3px rgba(176, 125, 0, 0.18); font-size: 8px; width: 26px; height: 22px; border-radius: 8px; }
 .tl-game.t { background: var(--tie); box-shadow: 0 0 0 3px rgba(139, 152, 169, 0.18); }
 
 /* ============================================================
@@ -1414,10 +1423,12 @@ html[data-theme="dark"] tbody tr:hover { background: rgba(255, 255, 255, 0.05); 
 
 html[data-theme="dark"] .form-chip.w { background: rgba(52, 226, 168, 0.14); border-color: rgba(52, 226, 168, 0.38); }
 html[data-theme="dark"] .form-chip.l { background: rgba(255, 93, 108, 0.14); border-color: rgba(255, 93, 108, 0.38); }
+html[data-theme="dark"] .form-chip.otl { background: rgba(255, 209, 102, 0.14); border-color: rgba(255, 209, 102, 0.38); color: #ffd166; }
 html[data-theme="dark"] .form-chip.t { background: rgba(169, 184, 207, 0.14); border-color: rgba(169, 184, 207, 0.38); }
 
 html[data-theme="dark"] .streak-badge.win  { background: rgba(52, 226, 168, 0.14); border-color: rgba(52, 226, 168, 0.38); }
 html[data-theme="dark"] .streak-badge.loss { background: rgba(255, 93, 108, 0.14); border-color: rgba(255, 93, 108, 0.38); }
+html[data-theme="dark"] .streak-badge.otl  { background: rgba(255, 209, 102, 0.14); border-color: rgba(255, 209, 102, 0.38); color: #ffd166; }
 html[data-theme="dark"] .streak-badge.tie  { background: rgba(169, 184, 207, 0.14); border-color: rgba(169, 184, 207, 0.38); }
 
 html[data-theme="dark"] .timeline::before {

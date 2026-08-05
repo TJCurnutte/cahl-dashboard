@@ -82,12 +82,13 @@ def team(team_id):
     if err:
         return jsonify({"error": err}), 502
 
+    team_row = next((s for s in (stand or []) if s.get("team_id") == team_id), None)
     return jsonify({
         "overview": over,
         "schedule": sched,
         "roster": stats,
         "standings": stand,
-        "form": scraper.compute_team_form(sched or [], team_id),
+        "form": scraper.compute_team_form(sched or [], team_id, team_row),
     })
 
 
