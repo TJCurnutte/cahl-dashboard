@@ -1029,6 +1029,61 @@ nav a.active svg, .nav-link.active svg {
 
 .picker-current .link { margin-left: 8px; font-size: 12px; }
 
+/* Team search typeahead */
+.team-search {
+  position: relative;
+  margin-bottom: 14px;
+  z-index: 30;
+}
+
+.team-search input { margin-bottom: 0; }
+
+.typeahead {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--blur-strong);
+  backdrop-filter: var(--blur-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-highlight), var(--shadow-lift);
+  max-height: 320px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.typeahead-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.typeahead-item:last-child { border-bottom: none; }
+
+.typeahead-item:hover { background: rgba(77, 184, 255, 0.12); }
+
+.typeahead-item .ta-name { font-weight: 600; min-width: 0; }
+
+.typeahead-item .ta-league {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.typeahead-item.muted { color: var(--muted); cursor: default; }
+
+.typeahead-item.muted:hover { background: transparent; }
+
 /* ============================================================
    Desktop enhancements
    ============================================================ */

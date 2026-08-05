@@ -735,6 +735,48 @@ def _parse_player_history_soup(soup):
     return {"name": name, "history": history}
 
 
+def parse_all_teams(max_workers=8):
+    """Aggregate every team across all leagues (for global team search).
+
+    Fetches each league dashboard in parallel and pulls teams from standings.
+    Returns a list of {id, name, league_id, league_name, day}.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    home, err = parse_homepage()
+    if err:
+        return None, err
+
+    leagues = home.get("leagues", [])
+    teams = {}
+    errors = []
+
+    def fetch(league):
+        dash, e = parse_dashboard(league["id"])
+        if e:
+            errors.append(f"{league['name']}: {e}")
+            return
+        for s in dash.get("standings", []):
+            tid = s.get("team_id")
+            name = s.get("team", "").strip()
+            if tid and name and tid not in teams:
+                teams[tid] = {
+                    "id": tid,
+                    "name": name,
+                    "league_id": league["id"],
+                    "league_name": league["name"],
+                }
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(fetch, leagues))
+
+    if not teams and errors:
+        return None, "; ".join(errors[:3])
+
+    # Sort alphabetically for stable UI
+    return sorted(teams.values(), key=lambda t: t["name"].lower()), None
+
+
 def compute_team_form(games, team_id):
     """Derive a team's season record, form, and streaks from its schedule.
 

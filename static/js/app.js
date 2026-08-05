@@ -11,6 +11,8 @@ const $main = document.getElementById('main');
       auto: false,
       leagues: [],
       teams: [],
+      allTeams: [],
+      allTeamsLoading: false,
       leaders: null,
       cache: {}
     };
@@ -102,6 +104,94 @@ const $main = document.getElementById('main');
 
     function changeLeagueHtml() {
       return `<div class="picker-current">League: <b>${currentLeagueName()}</b> <span class="link" data-change-league>Change</span></div>`;
+    }
+
+    // ---- Global team search with typeahead ----
+    function teamSearchHtml() {
+      return `<div class="team-search">
+        <input id="teamSearch" type="text" placeholder="Type a team name\u2026" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <div id="teamSuggest" class="typeahead" style="display:none"></div>
+      </div>`;
+    }
+
+    async function loadAllTeams() {
+      if (state.allTeams.length || state.allTeamsLoading) return;
+      state.allTeamsLoading = true;
+      try {
+        const res = await fetch('/api/teams');
+        const data = await res.json();
+        if (Array.isArray(data)) state.allTeams = data;
+      } catch (e) { /* typeahead keeps showing loading */ }
+      state.allTeamsLoading = false;
+      // refresh any visible dropdown now that data arrived
+      const input = $('#teamSearch');
+      if (input && input.value.trim()) input.dispatchEvent(new Event('input'));
+    }
+
+    async function pickSearchedTeam(teamId, leagueId) {
+      state.teamId = teamId;
+      localStorage.setItem('cahl-team', teamId);
+      if (leagueId) {
+        state.leagueId = leagueId;
+        localStorage.setItem('cahl-league', leagueId);
+        const l = state.leagues.find(x => x.id === leagueId);
+        if (l) {
+          state.leagueDay = leagueDay(l.name);
+          localStorage.setItem('cahl-league-day', state.leagueDay);
+        }
+        state.teams = []; // force refetch of this league's roster
+      }
+      await renderTeam();
+    }
+
+    function bindTeamSearch() {
+      const input = $('#teamSearch');
+      const box = $('#teamSuggest');
+      if (!input || !box) return;
+
+      input.addEventListener('focus', () => { loadAllTeams(); });
+
+      input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        const matches = state.allTeams.filter(t => t.name.toLowerCase().includes(q)).slice(0, 8);
+        if (!state.allTeams.length) {
+          box.innerHTML = '<div class="typeahead-item muted">Loading teams\u2026</div>';
+        } else if (!matches.length) {
+          box.innerHTML = '<div class="typeahead-item muted">No teams match</div>';
+        } else {
+          box.innerHTML = matches.map(t =>
+            `<div class="typeahead-item" data-tid="${t.id}" data-lid="${t.league_id}"><span class="ta-name">${t.name}</span><span class="ta-league">${t.league_name}</span></div>`
+          ).join('');
+        }
+        box.style.display = 'block';
+      });
+
+      box.addEventListener('click', e => {
+        const item = e.target.closest('.typeahead-item[data-tid]');
+        if (!item) return;
+        box.style.display = 'none';
+        input.value = '';
+        pickSearchedTeam(item.dataset.tid, item.dataset.lid);
+      });
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const first = box.querySelector('.typeahead-item[data-tid]');
+          if (first) {
+            box.style.display = 'none';
+            input.value = '';
+            pickSearchedTeam(first.dataset.tid, first.dataset.lid);
+          }
+        } else if (e.key === 'Escape') {
+          box.style.display = 'none';
+          input.blur();
+        }
+      });
+
+      document.addEventListener('click', e => {
+        if (!e.target.closest('.team-search')) box.style.display = 'none';
+      });
     }
 
     // ---- Interaction polish: skeletons, fade-in, count-ups, pull-to-refresh, button press ----
@@ -394,7 +484,7 @@ const $main = document.getElementById('main');
         state.leagues = home.leagues || [];
       }
 
-      let html = '<div class="card"><h2>My Team</h2>';
+      let html = '<div class="card"><h2>My Team</h2>' + teamSearchHtml();
 
       if (state.leagueId) {
         if (!state.teams.length) {
@@ -407,6 +497,7 @@ const $main = document.getElementById('main');
         html += '</select>';
         html += '<div id="teamContent"></div></div>';
         setMainHtml(html);
+        bindTeamSearch();
         $('#teamSelect').onchange = async (e) => {
           state.teamId = e.target.value;
           localStorage.setItem('cahl-team', state.teamId);
@@ -418,11 +509,13 @@ const $main = document.getElementById('main');
         html += '<div id="teamContent"></div>';
         html += '<div class="picker-hint" style="margin-top:16px">Pick your league to switch teams:</div>' + pickerHtml() + '</div>';
         setMainHtml(html);
+        bindTeamSearch();
         await loadTeamContent(state.teamId, refresh);
       } else {
         html += '<div class="picker-hint" style="margin:-4px 0 10px">Pick a day, then your league</div>' + pickerHtml();
         html += '<div id="teamContent"></div></div>';
         setMainHtml(html);
+        bindTeamSearch();
       }
     }
 

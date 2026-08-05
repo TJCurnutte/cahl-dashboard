@@ -70,6 +70,24 @@ def team(team_id):
     })
 
 
+_TEAMS_CACHE = {"data": None, "ts": 0}
+_TEAMS_TTL = 300  # 5 minutes; aggregating 30 league pages is expensive
+
+
+@app.route("/api/teams")
+def teams():
+    import time
+    now = time.time()
+    if _TEAMS_CACHE["data"] is not None and now - _TEAMS_CACHE["ts"] < _TEAMS_TTL:
+        return jsonify(_TEAMS_CACHE["data"])
+    data, err = scraper.parse_all_teams()
+    if err:
+        return jsonify({"error": err}), 502
+    _TEAMS_CACHE["data"] = data
+    _TEAMS_CACHE["ts"] = now
+    return jsonify(data)
+
+
 @app.route("/api/player/<team_id>/<player_id>")
 def player(team_id, player_id):
     data, err = scraper.parse_player_history(team_id, player_id)
@@ -85,6 +103,8 @@ def player_token(token):
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
     scraper.clear_cache()
+    _TEAMS_CACHE["data"] = None
+    _TEAMS_CACHE["ts"] = 0
     return jsonify({"ok": True})
 
 
