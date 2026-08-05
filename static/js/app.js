@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 23;
+const JS_VERSION = 24;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -24,6 +24,7 @@ const $main = document.getElementById('main');
       auto: false,
       leagues: [],
       teams: [],
+      teamsLeague: '',
       allTeams: [],
       allTeamsLoading: false,
       allPlayers: [],
@@ -174,6 +175,9 @@ const $main = document.getElementById('main');
         state.leagueDay = leagueDay(l.name);
         localStorage.setItem('cahl-league-day', state.leagueDay);
       }
+      // Team list belongs to the previous league — force a refetch
+      state.teams = [];
+      state.teamsLeague = '';
       if (state.tab === 'league') await renderLeague();
       else if (state.tab === 'team') await renderTeam();
       else if (state.tab === 'analytics') await renderAnalytics();
@@ -265,6 +269,7 @@ const $main = document.getElementById('main');
           localStorage.setItem('cahl-league-day', state.leagueDay);
         }
         state.teams = []; // force refetch of this league's roster
+        state.teamsLeague = '';
       }
       await renderTeam();
     }
@@ -803,10 +808,8 @@ const $main = document.getElementById('main');
 
       // build team list from standings for the team tab
       state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
-      if (state.teamId) {
-        const inLeague = state.teams.find(t => t.id === state.teamId);
-        if (!inLeague) state.teamId = '';
-      }
+      state.teamsLeague = leagueId;
+      // Note: the saved team (state.teamId) persists even when browsing other leagues.
 
       // Reset sessions/calendar/compare state when the league changes
       if (state._sessions && state._sessions.leagueId !== leagueId) {
@@ -1215,9 +1218,11 @@ const $main = document.getElementById('main');
       let html = '<div class="card"><h2>My Team</h2>' + teamSearchHtml();
 
       if (state.leagueId) {
-        if (!state.teams.length) {
+        // Refetch when the cached team list belongs to a different league
+        if (!state.teams.length || state.teamsLeague !== state.leagueId) {
           const data = await api(`/api/league/${state.leagueId}`);
           state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
+          state.teamsLeague = state.leagueId;
         }
         html += changeLeagueHtml();
         html += '<select id="teamSelect"><option value="">Choose your team</option>';
