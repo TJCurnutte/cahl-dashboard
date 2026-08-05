@@ -1,6 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Font is loaded via <link> in index.html (render-blocking @import removed for perf)
 
-/* ============================================================
+   ============================================================
    CAHL Dashboard — Columbus Blue Jackets inspired theme
    Union Blue #002654 · Goal Red #CE1126 · Capital Silver #A4A9AD
    Light "ice rink" base, navy glass chrome, red accents.
@@ -70,6 +70,7 @@ html, body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background 0.35s var(--ease), color 0.35s var(--ease);
 }
 
 /* Soft CBJ ambient backdrop — ice with navy/red/silver glows */
@@ -179,7 +180,7 @@ header .controls {
   height: 20px;
   vertical-align: -3px;
   margin-right: 6px;
-  color: #ff4d5e;
+  color: var(--accent);
 }
 
 .brand-text { font-weight: 800; letter-spacing: 0.4px; color: var(--on-navy); }
@@ -313,7 +314,7 @@ select, input {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: 16px; /* >=16px prevents iOS auto-zoom on focus */
   font-family: var(--font);
   margin-bottom: 12px;
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
@@ -779,7 +780,19 @@ td.num, .num { text-align: center; font-variant-numeric: tabular-nums; }
   max-height: 320px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
+
+.typeahead.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.typeahead-item.ta-active { background: rgba(206, 17, 38, 0.07); }
 
 .typeahead-item {
   display: flex;
@@ -1369,6 +1382,72 @@ nav a.active, .nav-link.active {
 }
 
 .cal-nav-right { display: flex; gap: 6px; }
+
+/* ============================================================
+   Pointer-aware adjustments (site knows touch vs mouse)
+   ============================================================ */
+
+/* Coarse pointer (touch): bigger targets, no hover-only affordances */
+@media (hover: none), (pointer: coarse) {
+  .pill { padding: 10px 16px; }
+  .game-card:hover { transform: none; box-shadow: var(--glass-highlight), var(--shadow-soft); }
+  .cal-cell.has-games:hover { transform: none; }
+  .cal-cell.has-games { min-height: 48px; }
+  .typeahead-item { padding: 13px 14px; }
+  .today-row { padding: 14px 2px; min-height: 48px; }
+  .today-row .link { padding: 6px 0; margin: -6px 0; }
+  .nav-link { min-height: 48px; min-width: 48px; justify-content: center; }
+  th, td { padding: 14px 8px; }
+  th:first-child, td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--glass-bg-strong);
+    z-index: 1;
+  }
+  .tl-game::after { content: ""; position: absolute; inset: -11px; } /* 44px tap target, visual stays 22px */
+
+  .cmp-picker { flex-direction: column; align-items: stretch; gap: 10px; }
+  .cmp-picker button { padding: 12px 16px; min-height: 48px; }
+}
+
+/* Fine pointer (mouse): hover affordances are safe */
+@media (hover: hover) and (pointer: fine) {
+  .today-row:hover { background: rgba(0, 38, 84, 0.04); border-radius: 8px; }
+  tbody tr:hover { background: rgba(0, 38, 84, 0.05); }
+}
+
+/* Tablet: hybrid layout — keep mobile chrome but relax density */
+@media (min-width: 600px) and (max-width: 899px) {
+  .stat-grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
+  .today-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+}
+
+/* ============================================================
+   Theme transition — smooth light/dark color swap on key surfaces
+   ============================================================ */
+
+/* Only elements without their own transition shorthand (pills/cards/toast keep theirs) */
+.card, .stat-box, .today-row, nav, header, .form-chip, .streak-badge, .bar, .t-rink {
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease), border-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+/* ============================================================
+   Print — clean standings/schedule/stats on paper
+   ============================================================ */
+
+@media print {
+  body, html { background: #fff !important; color: #000 !important; overflow: visible; height: auto; }
+  body::before, body::after { display: none !important; }
+  header, nav, .toast, .ptr-hint, .skip-link, #a11y-announcer { display: none !important; }
+  #app { max-width: 100% !important; height: auto !important; }
+  main { padding: 0 !important; overflow: visible !important; }
+  .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #bbb !important; background: #fff !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .game-card, .stat-box { box-shadow: none !important; border: 1px solid #ddd !important; }
+  table { font-size: 11pt; display: table !important; overflow: visible !important; }
+  th, td { color: #000 !important; }
+  .link { color: #000 !important; text-decoration: underline; }
+  .fade-in { animation: none !important; }
+}
 
 /* ============================================================
    Dark mode — CBJ night variant (toggle in header)

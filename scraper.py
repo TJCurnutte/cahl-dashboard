@@ -1,5 +1,6 @@
 import re
 import time
+import unicodedata
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -85,6 +86,16 @@ def _player_id(href):
 def _score_to_int(s):
     s = s.strip() if s else ""
     return int(s) if s.isdigit() else 0
+
+
+def _norm_team_name(name):
+    """Accent/punctuation-insensitive team-name normalization for matching."""
+    if not name:
+        return ""
+    n = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    n = re.sub(r"[^\w\s]", "", n)
+    n = re.sub(r"\b(hockey|hc)\b", "", n, flags=re.IGNORECASE)
+    return " ".join(n.lower().split())
 
 
 def parse_homepage():
@@ -591,10 +602,9 @@ def parse_team_schedule(team_id):
             rink = _text(cells[3])
 
             def _is_current_team(name):
-                # Normalized exact match only — substring matching causes false positives
-                # (e.g. "Red" matching both "Red Wings" and "Red Sox")
-                norm = name.lower().strip().replace(" hockey", "")
-                return norm == team_name_core.lower() or name == team_name
+                # Accent/punct-insensitive exact match — substring matching causes
+                # false positives (e.g. "Red" matching both "Red Wings" and "Red Sox")
+                return _norm_team_name(name) == _norm_team_name(team_name_core)
 
             home_link = cells[4].find("a", href=True)
             away_link = cells[5].find("a", href=True)
@@ -604,6 +614,9 @@ def parse_team_schedule(team_id):
             away_id = _team_id(away_link["href"]) if away_link else (team_id if _is_current_team(away) else None)
 
             score_text = _text(cells[6])
+            # Postponed/TBD placeholders must not count as played 0-0 games
+            if score_text.strip().upper() in ("PPD", "TBD", "TBA", "-", ""):
+                score_text = ""
             m = re.match(r"(\d+)\s*-\s*(\d+)", score_text)
             home_score = _score_to_int(m.group(1)) if m else 0
             away_score = _score_to_int(m.group(2)) if m else 0
@@ -728,8 +741,7 @@ def parse_team_standings(team_id):
     team_name_core = team_name.replace(" Hockey", "").strip()
 
     def _is_current_team(name):
-        norm = name.lower().strip().replace(" hockey", "")
-        return norm == team_name_core.lower() or name == team_name
+        return _norm_team_name(name) == _norm_team_name(team_name_core)
 
     standings = []
     table = soup.find("table", class_=re.compile("table"))
@@ -908,7 +920,9 @@ def parse_league_sessions(league_id, max_workers=8):
             errors.append(e)
             return
         for g in sched:
-            key = (g["date"], g["time"], g["home"].strip().lower(), g["away"].strip().lower())
+            # Facility included: simultaneous games at different rinks must not collide
+            key = (g["date"], g["time"], g["home"].strip().lower(), g["away"].strip().lower(),
+                   (g.get("facility") or "").strip().lower())
             if key not in games:
                 games[key] = g
 
