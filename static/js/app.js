@@ -1,3 +1,16 @@
+// If this page was restored from the back/forward cache (bfcache), it may be a
+// stale build — force a real reload so the no-store shell refetches.
+window.addEventListener('pageshow', e => {
+  if (e.persisted) location.reload();
+});
+
+// Version guard: if the cached HTML and JS disagree, reload once to resync.
+const JS_VERSION = 17;
+if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
+  sessionStorage.setItem('vresync', '1');
+  location.reload();
+}
+
 const $main = document.getElementById('main');
     const $refresh = document.getElementById('refreshBtn');
     const $auto = document.getElementById('autoToggle');

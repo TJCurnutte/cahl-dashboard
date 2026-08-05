@@ -537,8 +537,8 @@ html[data-theme="dark"] .t-score:not(.live-badge) { background: rgba(255, 255, 2
   background: var(--glass-bg-strong);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 7px 13px;
-  font-size: 12.5px;
+  padding: 9px 15px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   color: var(--muted);
