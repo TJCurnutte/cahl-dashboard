@@ -315,13 +315,17 @@ def version():
 
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
+    """scope=scores (cron): light refresh of page-level caches only, leaving the big
+    aggregates (players/teams indexes) intact. scope=all (manual): full force refresh."""
+    scope = request.args.get("scope", "all")
     scraper.clear_cache()
-    _TEAMS_CACHE["data"] = None
-    _TEAMS_CACHE["ts"] = 0
-    _PLAYERS_CACHE["data"] = None
-    _PLAYERS_CACHE["ts"] = 0
     _SESSIONS_CACHE.clear()
-    return jsonify({"ok": True})
+    if scope == "all":
+        _TEAMS_CACHE["data"] = None
+        _TEAMS_CACHE["ts"] = 0
+        _PLAYERS_CACHE["data"] = None
+        _PLAYERS_CACHE["ts"] = 0
+    return jsonify({"ok": True, "scope": scope})
 
 
 if __name__ == "__main__":

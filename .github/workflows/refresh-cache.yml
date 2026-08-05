@@ -1,0 +1,23 @@
+name: Warm CAHL caches
+
+# Runs every 30 minutes (GitHub-hosted cron — no local machine needed).
+# The script itself decides: hourly baseline refresh when idle,
+# 30-minute refresh only while a game is active.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refresh CAHL caches
+        env:
+          BASE_URL: https://cahl.neural-forge.io
+        run: python3 .github/scripts/refresh_cache.py
