@@ -5,13 +5,23 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 27;
+const JS_VERSION = 28;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
 }
 
+// Self-heal: if the server is running a NEWER frontend than this cached JS, reload fresh.
+fetch('/api/version').then(r => r.json()).then(v => {
+  if (v.js > JS_VERSION && !sessionStorage.getItem('vserverheal')) {
+    sessionStorage.setItem('vserverheal', '1');
+    location.reload();
+  }
+}).catch(() => {});
+
 const $main = document.getElementById('main');
+const $ver = document.getElementById('verBadge');
+if ($ver) $ver.textContent = 'v' + JS_VERSION;
     const $refresh = document.getElementById('refreshBtn');
     const $auto = document.getElementById('autoToggle');
     const navLinks = document.querySelectorAll('.nav-link');

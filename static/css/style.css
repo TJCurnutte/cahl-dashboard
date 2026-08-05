@@ -147,6 +147,16 @@ header .controls {
   gap: 10px;
 }
 
+.ver-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--on-navy-muted);
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 /* Header brand: whole wordmark links home */
 .brand-home {
   display: inline-flex;

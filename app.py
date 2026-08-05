@@ -301,6 +301,18 @@ def player_token(token):
     return _jsonify(data, err)
 
 
+@app.route("/api/version")
+def version():
+    """Frontend version for the self-heal freshness check (parsed from app.js)."""
+    import re as _re
+    try:
+        src = open(os.path.join(BASE_DIR, "static", "js", "app.js")).read()
+        m = _re.search(r"JS_VERSION\s*=\s*(\d+)", src)
+        return jsonify({"js": int(m.group(1)) if m else 0})
+    except Exception:
+        return jsonify({"js": 0})
+
+
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
     scraper.clear_cache()
