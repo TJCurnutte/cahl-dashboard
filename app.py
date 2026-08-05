@@ -140,7 +140,7 @@ def _sessions_for_team(team_id):
 
 
 _TEAMS_CACHE = {"data": None, "ts": 0}
-_TEAMS_TTL = 300  # 5 minutes; aggregating 30 league pages is expensive
+_TEAMS_TTL = 900  # 15 minutes; aggregating 30 league pages is expensive
 
 
 @app.route("/api/teams")
@@ -158,7 +158,7 @@ def teams():
 
 
 _PLAYERS_CACHE = {"data": None, "ts": 0}
-_PLAYERS_TTL = 900  # 15 minutes; rosters change slowly, fan-out is expensive
+_PLAYERS_TTL = 1800  # 30 minutes; rosters change slowly, fan-out is expensive
 
 
 @app.route("/api/players")
@@ -168,7 +168,7 @@ def players():
     from concurrent.futures import ThreadPoolExecutor
     now = time.time()
     if _PLAYERS_CACHE["data"] is not None and now - _PLAYERS_CACHE["ts"] < _PLAYERS_TTL:
-        return jsonify(_PLAYERS_CACHE["data"])
+        return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False})
 
     teams_data, err = scraper.parse_all_teams()
     if err:
@@ -178,7 +178,11 @@ def players():
     errors = []
 
     def fetch(team):
-        roster, e = scraper.parse_team_stats(team["id"])
+        try:
+            roster, e = scraper.parse_team_stats(team["id"])
+        except Exception as ex:
+            errors.append(str(ex))
+            return
         if e:
             errors.append(e)
             return
@@ -225,16 +229,29 @@ def players():
                 "gaa": g.get("gaa", 0),
             }
 
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        list(ex.map(fetch, teams_data))
+    # Soft-timeout the fan-out so the endpoint always answers inside the
+    # function limit. Partial results are returned (never cached); pages that
+    # finished land in the scraper cache, so a follow-up call completes fast.
+    SOFT_TIMEOUT = 50
+    ex = ThreadPoolExecutor(max_workers=12)
+    futures = [ex.submit(fetch, team) for team in teams_data]
+    done, pending = concurrent.futures.wait(futures, timeout=SOFT_TIMEOUT)
+    complete = not pending
+    ex.shutdown(wait=False, cancel_futures=True)
 
-    if not index and errors:
+    if not index and errors and not done:
         return jsonify({"error": "; ".join(errors[:3])}), 502
 
     data = sorted(index.values(), key=lambda p: p["name"].lower())
-    _PLAYERS_CACHE["data"] = data
-    _PLAYERS_CACHE["ts"] = now
-    return jsonify(data)
+    if complete:
+        _PLAYERS_CACHE["data"] = data
+        _PLAYERS_CACHE["ts"] = now
+    return jsonify({
+        "players": data,
+        "partial": not complete,
+        "fetched": len(done),
+        "total": len(teams_data),
+    })
 
 
 _SESSIONS_CACHE = {}

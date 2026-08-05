@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 25;
+const JS_VERSION = 27;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -29,6 +29,7 @@ const $main = document.getElementById('main');
       allTeamsLoading: false,
       allPlayers: [],
       allPlayersLoading: false,
+      playersError: false,
       board: { level: 'all', sortKey: 'pts', sortDir: 'desc', showAll: false },
       playersLeague: localStorage.getItem('cahl-players-league') || '',
       playersDay: '',
@@ -244,17 +245,39 @@ const $main = document.getElementById('main');
       if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    async function loadAllPlayers() {
-      if (state.allPlayers.length || state.allPlayersLoading) return;
+    async function loadAllPlayers(force=false) {
+      if (state.allPlayersLoading) return;
+      if (state.allPlayers.length && !force) return;
       state.allPlayersLoading = true;
+      state.playersError = false;
       try {
         const res = await fetch('/api/players');
         const data = await res.json();
-        if (Array.isArray(data)) state.allPlayers = data;
-      } catch (e) { /* dropdown keeps showing loading */ }
+        const list = Array.isArray(data) ? data : (data && data.players);
+        if (Array.isArray(list) && list.length) {
+          state.allPlayers = list;
+          if (!Array.isArray(data) && data.partial) {
+            state.playersPartial = { fetched: data.fetched, total: data.total };
+            // Scraped pages are warm now — a retry finishes the rest quickly (bounded)
+            state.playersRetries = (state.playersRetries || 0) + 1;
+            if (state.playersRetries <= 5) {
+              setTimeout(() => loadAllPlayers(true), 15000);
+            }
+          } else {
+            state.playersPartial = null;
+            state.playersRetries = 0;
+          }
+        } else {
+          state.playersError = true;
+        }
+      } catch (e) {
+        state.playersError = true;
+      }
       state.allPlayersLoading = false;
+      // Re-render whatever is visible so error/loaded states refresh
       const input = $('#playerSearch');
       if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (state.tab === 'players') renderPlayers();
     }
 
     async function pickSearchedTeam(teamId, leagueId) {
@@ -347,8 +370,10 @@ const $main = document.getElementById('main');
       const matches = state.allPlayers.filter(p =>
         p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q)
       ).slice(0, 10);
-      if (!state.allPlayers.length) {
-        box.innerHTML = '<div class="typeahead-item muted">Loading players…</div>';
+      if (state.playersError && !state.allPlayers.length) {
+        box.innerHTML = '<div class="typeahead-item" data-pretry><span class="ta-name">Couldn\u2019t load players \u2014 tap to retry</span></div>';
+      } else if (!state.allPlayers.length) {
+        box.innerHTML = '<div class="typeahead-item muted">Loading players\u2026</div>';
       } else if (!matches.length) {
         box.innerHTML = '<div class="typeahead-item muted">No players match</div>';
       } else {
@@ -416,13 +441,17 @@ const $main = document.getElementById('main');
       html += '</div>';
 
       if (!state.allPlayers.length) {
-        html += '<div class="empty">Loading every player in the CAHL\u2026</div></div>';
+        if (state.playersError) {
+          html += '<div class="empty">Couldn\u2019t load the player index (it\u2019s a big scrape \u2014 first load can take a minute). <button class="ghost small" data-pretry style="margin-top:8px">Retry</button></div></div>';
+        } else {
+          html += '<div class="empty">Loading every player in the CAHL\u2026 <span class="picker-hint" style="display:block;margin-top:4px">first load can take a minute</span></div></div>';
+        }
         return html;
       }
 
       const rows = boardRows();
       const shown = showAll ? rows : rows.slice(0, 100);
-      html += `<div class="picker-hint">${rows.length} players \u00b7 click a column to sort (again to flip) \u00b7 tap a row for all-time stats</div>`;
+      html += `<div class="picker-hint">${rows.length} players${state.playersPartial ? ` (still loading ${state.playersPartial.fetched}/${state.playersPartial.total}\u2026)` : ''} \u00b7 click a column to sort (again to flip) \u00b7 tap a row for all-time stats</div>`;
       html += '<table class="board"><thead><tr><th class="num">#</th>';
       BOARD_COLS.forEach(c => {
         const arrow = sortKey === c.key ? (sortDir === 'desc' ? ' \u2193' : ' \u2191') : '';
@@ -1785,6 +1814,13 @@ const $main = document.getElementById('main');
         return;
       }
 
+      // Retry loading the player index after a failure
+      const retryEl = e.target.closest('[data-pretry]');
+      if (retryEl) {
+        loadAllPlayers(true);
+        return;
+      }
+
       // Leaderboard level filters + column sorting
       const levelEl = e.target.closest('[data-level]');
       if (levelEl) {
@@ -1925,4 +1961,7 @@ const $main = document.getElementById('main');
       $auto.checked = state.auto;
       if (state.auto) autoTimer = setInterval(() => loadActiveTab(true), 60000);
       setTab(state.tab);
+      // Prefetch the big aggregates in the background so pickers are warm on arrival
+      loadAllTeams();
+      loadAllPlayers();
     })();
