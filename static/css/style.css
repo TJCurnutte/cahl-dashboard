@@ -146,6 +146,21 @@ header .controls {
   gap: 10px;
 }
 
+/* Header brand: whole wordmark links home */
+.brand-home {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.brand-home:hover { opacity: 0.85; }
+.brand-home:active { opacity: 0.7; }
+.brand-home:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.6); outline-offset: 3px; }
+
 /* Header brand mark + accent (STRUCTURE agent markup) */
 .brand-mark {
   width: 20px;

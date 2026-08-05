@@ -852,6 +852,13 @@ const $main = document.getElementById('main');
       setTab(a.dataset.tab);
     }));
 
+    // Brand takes you home (Today) and back to the top
+    document.getElementById('brandHome').addEventListener('click', e => {
+      e.preventDefault();
+      setTab('today');
+      $main.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
     // Delegated league-picker + change-league clicks
     $main.addEventListener('click', async (e) => {
       // Players-tab division filter (separate state from main league picker)

@@ -20,6 +20,14 @@ def _jsonify(data, err):
     return jsonify(data)
 
 
+@app.after_request
+def no_cache_html(resp):
+    # Always serve the shell fresh; static assets are versioned with ?v=N.
+    if resp.content_type and resp.content_type.startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
