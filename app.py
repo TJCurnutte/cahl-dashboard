@@ -149,6 +149,11 @@ def players():
                     "position": p.get("position") or sec["label"],
                     "jersey": p.get("jersey", "-"),
                     "token": p.get("token"),
+                    "gp": p.get("gp", 0),
+                    "g": p.get("g", 0),
+                    "a": p.get("a", 0),
+                    "pts": p.get("pts", 0),
+                    "pim": p.get("pim", 0),
                 }
         for g in roster.get("goalies", []):
             key = f"{g['name'].lower()}|{team['id']}"
@@ -161,6 +166,16 @@ def players():
                 "position": "Goalie",
                 "jersey": g.get("jersey", "-"),
                 "token": g.get("token"),
+                "gp": g.get("gp", 0),
+                "g": 0,
+                "a": 0,
+                "pts": 0,
+                "pim": 0,
+                "w": g.get("w", 0),
+                "l": g.get("l", 0),
+                "otl": g.get("otl", 0),
+                "ga": g.get("ga", 0),
+                "gaa": g.get("gaa", 0),
             }
 
     with ThreadPoolExecutor(max_workers=10) as ex:

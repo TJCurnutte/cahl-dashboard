@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 20;
+const JS_VERSION = 21;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -28,6 +28,7 @@ const $main = document.getElementById('main');
       allTeamsLoading: false,
       allPlayers: [],
       allPlayersLoading: false,
+      board: { level: 'all', sortKey: 'pts', sortDir: 'desc', showAll: false },
       playersLeague: localStorage.getItem('cahl-players-league') || '',
       playersDay: '',
       _sessions: null,
@@ -359,6 +360,89 @@ const $main = document.getElementById('main');
       if (!token) { showToast('No profile link for that player'); return; }
       state.profileReturn = 'players';
       renderPlayerProfile(null, null, token);
+    }
+
+    // ---- Full sortable leaderboard ----
+    function leagueLevel(name) {
+      // First standalone a/b/c/d letter = level ("North A"/"West B" are regions, not levels)
+      const m = (name || '').toLowerCase().match(/(?:^|\s)([abcd])(?=\s|$|-)/);
+      return m ? m[1] : 'other';
+    }
+
+    const BOARD_COLS = [
+      { key: 'name', label: 'Player' },
+      { key: 'team', label: 'Team' },
+      { key: 'position', label: 'Pos' },
+      { key: 'gp', label: 'GP', num: true },
+      { key: 'g', label: 'G', num: true },
+      { key: 'a', label: 'A', num: true },
+      { key: 'pts', label: 'Pts', num: true },
+      { key: 'ppg', label: 'P/GP', num: true },
+      { key: 'pim', label: 'PIM', num: true },
+    ];
+
+    function boardRows() {
+      const { level, sortKey, sortDir } = state.board;
+      let rows = state.allPlayers;
+      if (level !== 'all') rows = rows.filter(p => leagueLevel(p.league_name) === level);
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const val = p => {
+        if (sortKey === 'name') return p.name.toLowerCase();
+        if (sortKey === 'team') return p.team.toLowerCase();
+        if (sortKey === 'position') return (p.position || '').toLowerCase();
+        if (sortKey === 'ppg') return p.gp ? p.pts / p.gp : 0;
+        return p[sortKey] ?? 0;
+      };
+      return rows.slice().sort((a, b) => {
+        const va = val(a), vb = val(b);
+        if (va < vb) return -dir;
+        if (va > vb) return dir;
+        return 0;
+      });
+    }
+
+    function leaderboardHtml() {
+      const { level, sortKey, sortDir, showAll } = state.board;
+      const LEVELS = [['all', 'All Levels'], ['b', 'B League'], ['c', 'C League'], ['d', 'D League'], ['other', 'Other']];
+      let html = '<div class="card"><h2>Full Leaderboard</h2><div class="picker-days">';
+      LEVELS.forEach(([k, label]) => {
+        html += `<span class="pill ${level === k ? 'active' : ''}" data-level="${k}" tabindex="0" role="button">${label}</span>`;
+      });
+      html += '</div>';
+
+      if (!state.allPlayers.length) {
+        html += '<div class="empty">Loading every player in the CAHL\u2026</div></div>';
+        return html;
+      }
+
+      const rows = boardRows();
+      const shown = showAll ? rows : rows.slice(0, 100);
+      html += `<div class="picker-hint">${rows.length} players \u00b7 click a column to sort (again to flip) \u00b7 tap a row for all-time stats</div>`;
+      html += '<table class="board"><thead><tr><th class="num">#</th>';
+      BOARD_COLS.forEach(c => {
+        const arrow = sortKey === c.key ? (sortDir === 'desc' ? ' \u2193' : ' \u2191') : '';
+        html += `<th${c.num ? ' class="num"' : ''} data-sort="${c.key}" tabindex="0" role="button" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+      html += shown.map((p, i) => `
+        <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+          <td class="num">${i + 1}</td>
+          <td><span class="link">${esc(p.name)}</span></td>
+          <td>${esc(p.team)}</td>
+          <td>${esc(p.position || '-')}</td>
+          <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td>
+          <td class="num">${p.pts}</td>
+          <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td>
+          <td class="num">${p.pim}</td>
+        </tr>`).join('');
+      html += '</tbody></table>';
+      if (!showAll && rows.length > shown.length) {
+        html += `<button class="ghost small" data-showall style="margin-top:10px">Show all ${rows.length} players</button>`;
+      } else if (showAll && rows.length > 100) {
+        html += `<button class="ghost small" data-showall style="margin-top:10px">Show top 100</button>`;
+      }
+      html += '</div>';
+      return html;
     }
 
     function _legacyBindTeamSearch() {
@@ -1285,9 +1369,14 @@ const $main = document.getElementById('main');
         state.leagues = home.leagues || [];
       }
 
+      loadAllPlayers();
+
       // Player lookup at the very top — search any player, tap for all-time stats
       let html = '<div class="card player-lookup-card"><h2>Player Lookup</h2>' + playerSearchHtml()
         + '<div class="picker-hint">Search any player across all CAHL teams — tap a name for their all-time stats</div></div>';
+
+      // Full sortable leaderboard with level filters
+      html += leaderboardHtml();
 
       html += '<div class="card">';
       if (state.playersLeague) {
@@ -1491,7 +1580,7 @@ const $main = document.getElementById('main');
     // Keyboard operability for pill/cell controls (Enter/Space activates)
     $main.addEventListener('keydown', e => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      const target = e.target.closest('[data-day], [data-lid], [data-sec], [data-session], [data-cal-day], [data-pl-all], [data-pl-day], [data-pl-lid], [data-change-league], [data-cal-today], [data-cal-prev], [data-cal-next]');
+      const target = e.target.closest('[data-day], [data-lid], [data-sec], [data-session], [data-cal-day], [data-pl-all], [data-pl-day], [data-pl-lid], [data-change-league], [data-cal-today], [data-cal-prev], [data-cal-next], [data-level], th[data-sort], [data-showall]');
       if (target) {
         e.preventDefault();
         target.click();
@@ -1569,6 +1658,29 @@ const $main = document.getElementById('main');
         if (input) input.value = '';
         if (box) paClose(input, box);
         pickSearchedPlayer(paItem.dataset.ptoken);
+        return;
+      }
+
+      // Leaderboard level filters + column sorting
+      const levelEl = e.target.closest('[data-level]');
+      if (levelEl) {
+        state.board.level = levelEl.dataset.level;
+        state.board.showAll = false;
+        await renderPlayers();
+        return;
+      }
+      const sortEl = e.target.closest('th[data-sort]');
+      if (sortEl) {
+        const key = sortEl.dataset.sort;
+        if (state.board.sortKey === key) state.board.sortDir = state.board.sortDir === 'desc' ? 'asc' : 'desc';
+        else { state.board.sortKey = key; state.board.sortDir = key === 'name' || key === 'team' ? 'asc' : 'desc'; }
+        await renderPlayers();
+        return;
+      }
+      const showAllEl = e.target.closest('[data-showall]');
+      if (showAllEl) {
+        state.board.showAll = !state.board.showAll;
+        await renderPlayers();
         return;
       }
 

@@ -1383,6 +1383,17 @@ nav a.active, .nav-link.active {
 
 .cal-nav-right { display: flex; gap: 6px; }
 
+/* Sortable leaderboard headers */
+th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--t-fast) var(--ease);
+}
+
+th[data-sort]:hover { color: var(--accent); }
+
+.player-lookup-card { border-left: 3px solid var(--accent); }
+
 /* ============================================================
    Pointer-aware adjustments (site knows touch vs mouse)
    ============================================================ */
