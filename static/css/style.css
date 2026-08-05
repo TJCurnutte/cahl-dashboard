@@ -937,6 +937,99 @@ nav a.active svg, .nav-link.active svg {
 }
 
 /* ============================================================
+   Condensed Today list + two-step league picker
+   ============================================================ */
+
+.today-card { padding: 12px 14px 6px; }
+
+.today-list { display: flex; flex-direction: column; }
+
+.today-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.today-row:last-child { border-bottom: none; }
+
+.t-time {
+  flex: 0 0 62px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.t-match {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.t-match .link { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+.t-vs { color: var(--muted); font-size: 11px; flex: 0 0 auto; }
+
+.t-rink {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+/* Two-step league picker */
+.picker-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.day-pill { font-weight: 700; }
+
+.pill-count {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+}
+
+.picker-leagues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.picker-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.picker-current {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.picker-current b { color: var(--text); font-weight: 700; }
+
+.picker-current .link { margin-left: 8px; font-size: 12px; }
+
+/* ============================================================
    Desktop enhancements
    ============================================================ */
 

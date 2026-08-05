@@ -6,6 +6,7 @@ const $main = document.getElementById('main');
     let state = {
       tab: 'today',
       leagueId: localStorage.getItem('cahl-league') || '',
+      leagueDay: localStorage.getItem('cahl-league-day') || '',
       teamId: localStorage.getItem('cahl-team') || '',
       auto: false,
       leagues: [],
@@ -19,6 +20,89 @@ const $main = document.getElementById('main');
 
     function $(sel){ return document.querySelector(sel); }
     function fmtTime(t){ return t || 'TBD'; }
+
+    // ---- Two-step league picker: day chips -> league pills ----
+    const DAY_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Other'];
+
+    function leagueDay(name) {
+      const n = (name || '').toLowerCase();
+      if (n.includes('sunday')) return 'Sunday';
+      if (n.includes('monday')) return 'Monday';
+      if (/\btue\b|tuesday/.test(n)) return 'Tuesday';
+      if (n.includes('wednesday')) return 'Wednesday';
+      if (/\bthur\b|thursday/.test(n)) return 'Thursday';
+      if (n.includes('friday')) return 'Friday';
+      return 'Other';
+    }
+
+    function shortLeagueName(name) {
+      let s = (name || '').trim();
+      s = s.replace(/^NTPRD Chiller\s+/i, '');
+      s = s.replace(/^(Sunday|Monday|Tuesday|Tue|Wednesday|Thursday|Thur|Friday)\s*-?\s*/i, '');
+      s = s.replace(/^NTPRD Chiller\s+/i, '');
+      s = s.replace(/\s*-?\s*league\s*$/i, '');
+      s = s.replace(/^-\s*/, '').trim();
+      return s || name;
+    }
+
+    function leagueGroups() {
+      const groups = {};
+      DAY_ORDER.forEach(d => { groups[d] = []; });
+      state.leagues.forEach(l => groups[leagueDay(l.name)].push(l));
+      return groups;
+    }
+
+    function selectedLeagueDay() {
+      if (state.leagueDay) return state.leagueDay;
+      if (state.leagueId) {
+        const l = state.leagues.find(x => x.id === state.leagueId);
+        if (l) return leagueDay(l.name);
+      }
+      return '';
+    }
+
+    function pickerHtml() {
+      const groups = leagueGroups();
+      const day = selectedLeagueDay();
+      let html = '<div class="picker-days">';
+      DAY_ORDER.forEach(d => {
+        if (!groups[d].length) return;
+        html += `<span class="pill day-pill ${d === day ? 'active' : ''}" data-day="${d}">${d}<span class="pill-count">${groups[d].length}</span></span>`;
+      });
+      html += '</div>';
+      if (day && groups[day].length) {
+        html += '<div class="picker-leagues">';
+        groups[day].forEach(l => {
+          html += `<span class="pill league-pill ${l.id === state.leagueId ? 'active' : ''}" data-lid="${l.id}">${shortLeagueName(l.name)}</span>`;
+        });
+        html += '</div>';
+      }
+      return html;
+    }
+
+    function currentLeagueName() {
+      const l = state.leagues.find(x => x.id === state.leagueId);
+      return l ? l.name : '';
+    }
+
+    async function chooseLeague(lid) {
+      if (!lid) return;
+      state.leagueId = lid;
+      localStorage.setItem('cahl-league', lid);
+      const l = state.leagues.find(x => x.id === lid);
+      if (l) {
+        state.leagueDay = leagueDay(l.name);
+        localStorage.setItem('cahl-league-day', state.leagueDay);
+      }
+      if (state.tab === 'league') await renderLeague();
+      else if (state.tab === 'team') await renderTeam();
+      else if (state.tab === 'analytics') await renderAnalytics();
+      else setTab('league');
+    }
+
+    function changeLeagueHtml() {
+      return `<div class="picker-current">League: <b>${currentLeagueName()}</b> <span class="link" data-change-league>Change</span></div>`;
+    }
 
     // ---- Interaction polish: skeletons, fade-in, count-ups, pull-to-refresh, button press ----
 
@@ -198,51 +282,44 @@ const $main = document.getElementById('main');
       `;
     }
 
+    function todayRowHtml(g) {
+      const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
+      return `<div class="today-row">
+        <span class="t-time">${fmtTime(g.time)}</span>
+        <span class="t-match"><span class="link" onclick="selectTeam('${g.home_id || ''}')">${g.home}</span><span class="t-vs">vs</span><span class="link" onclick="selectTeam('${g.away_id || ''}')">${g.away}</span></span>
+        <span class="t-rink">${rink}</span>
+      </div>`;
+    }
+
     async function renderToday(refresh) {
       const data = await api('/api/today', refresh);
       if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
       state.leagues = data.leagues;
 
-      let html = '<div class="card"><h2>Today\'s Games</h2>';
-      if (!data.today.length) html += '<div class="empty">No games posted yet.</div>';
-      html += data.today.map(g => gameHtml(g)).join('');
+      let html = '<div class="card today-card"><h2>Today\'s Games</h2>';
+      if (!data.today.length) {
+        html += '<div class="empty">No games posted yet.</div>';
+      } else {
+        html += '<div class="today-list">' + data.today.map(todayRowHtml).join('') + '</div>';
+      }
       html += '</div>';
 
-      // Also show league filter shortcuts
-      html += '<div class="card"><h3>Leagues</h3><div class="pill-row">';
-      html += data.leagues.map(l => `<span class="pill" data-lid="${l.id}">${l.name}</span>`).join('');
-      html += '</div></div>';
+      html += '<div class="card"><h3>Leagues</h3>' + pickerHtml() +
+        '<div class="picker-hint">Pick a day, then a league</div></div>';
       setMainHtml(html);
-
-      $('.pill-row')?.addEventListener('click', e => {
-        if (e.target.classList.contains('pill')) {
-          state.leagueId = e.target.dataset.lid;
-          setTab('league');
-        }
-      });
     }
 
     async function renderLeague(refresh) {
-      let html = '<div class="card">';
-      html += '<h2>League / Scores</h2>';
-      html += '<select id="leagueSelect"><option value="">Choose a league</option>';
       if (!state.leagues.length) {
         const home = await api('/api/today');
         state.leagues = home.leagues || [];
       }
-      state.leagues.forEach(l => {
-        html += `<option value="${l.id}" ${l.id === state.leagueId ? 'selected' : ''}>${l.name}</option>`;
-      });
-      html += '</select>';
+      let html = '<div class="card">';
+      html += '<h2>League / Scores</h2>';
+      html += pickerHtml();
       html += '<div id="leagueContent"></div></div>';
       setMainHtml(html);
 
-      const $sel = $('#leagueSelect');
-      $sel.onchange = async () => {
-        state.leagueId = $sel.value;
-        localStorage.setItem('cahl-league', state.leagueId);
-        await loadLeagueContent(state.leagueId);
-      };
       if (state.leagueId) await loadLeagueContent(state.leagueId, refresh);
     }
 
@@ -302,42 +379,29 @@ const $main = document.getElementById('main');
       animateNumbers($content);
 
       $('.pill-row')?.addEventListener('click', e => {
-        if (e.target.classList.contains('pill')) {
+        if (e.target.classList.contains('pill') && e.target.dataset.sec) {
           const sec = e.target.dataset.sec;
           localStorage.setItem('cahl-league-section', sec);
-          document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.sec === sec));
+          document.querySelectorAll('.pill[data-sec]').forEach(p => p.classList.toggle('active', p.dataset.sec === sec));
           document.querySelectorAll('.league-sec').forEach(s => s.style.display = s.id === 'leagueSec' + sec ? 'block' : 'none');
         }
       });
     }
 
     async function renderTeam(refresh) {
-      let html = '<div class="card">';
-      html += '<h2>My Team</h2>';
+      if (!state.leagues.length) {
+        const home = await api('/api/today');
+        state.leagues = home.leagues || [];
+      }
 
-      if (!state.leagueId) {
-        if (!state.leagues.length) {
-          const home = await api('/api/today');
-          state.leagues = home.leagues || [];
-        }
-        html += '<label style="color:var(--muted);font-size:13px">Start by selecting your league</label>';
-        html += '<select id="teamLeagueSelect"><option value="">Choose league</option>';
-        state.leagues.forEach(l => html += `<option value="${l.id}">${l.name}</option>`);
-        html += '</select>';
-        html += '<div id="teamContent"></div></div>';
-        setMainHtml(html);
-        $('#teamLeagueSelect').onchange = async (e) => {
-          state.leagueId = e.target.value;
-          localStorage.setItem('cahl-league', state.leagueId);
-          const data = await api(`/api/league/${state.leagueId}`);
-          state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
-          renderTeamContent();
-        };
-      } else {
+      let html = '<div class="card"><h2>My Team</h2>';
+
+      if (state.leagueId) {
         if (!state.teams.length) {
           const data = await api(`/api/league/${state.leagueId}`);
           state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
         }
+        html += changeLeagueHtml();
         html += '<select id="teamSelect"><option value="">Choose your team</option>';
         state.teams.forEach(t => html += `<option value="${t.id}" ${t.id === state.teamId ? 'selected' : ''}>${t.name}</option>`);
         html += '</select>';
@@ -349,18 +413,17 @@ const $main = document.getElementById('main');
           await loadTeamContent(state.teamId);
         };
         if (state.teamId) await loadTeamContent(state.teamId, refresh);
+      } else if (state.teamId) {
+        // Team tapped from a game card but league unknown — show the team, offer picker to switch
+        html += '<div id="teamContent"></div>';
+        html += '<div class="picker-hint" style="margin-top:16px">Pick your league to switch teams:</div>' + pickerHtml() + '</div>';
+        setMainHtml(html);
+        await loadTeamContent(state.teamId, refresh);
+      } else {
+        html += '<div class="picker-hint" style="margin:-4px 0 10px">Pick a day, then your league</div>' + pickerHtml();
+        html += '<div id="teamContent"></div></div>';
+        setMainHtml(html);
       }
-    }
-
-    function renderTeamContent() {
-      const $content = $('#teamContent');
-      $content.innerHTML = `<select id="teamSelect"><option value="">Choose your team</option>` +
-        state.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('') + '</select>';
-      $('#teamSelect').onchange = async (e) => {
-        state.teamId = e.target.value;
-        localStorage.setItem('cahl-team', state.teamId);
-        await loadTeamContent(state.teamId);
-      };
     }
 
     async function loadTeamContent(teamId, refresh=false) {
@@ -497,25 +560,15 @@ const $main = document.getElementById('main');
     }
 
     async function renderAnalytics(refresh) {
-      let html = '<div class="card"><h2>Analytics</h2>';
+      if (!state.leagues.length) {
+        const home = await api('/api/today');
+        state.leagues = home.leagues || [];
+      }
 
       if (!state.leagueId) {
-        html += '<label style="color:var(--muted);font-size:13px">Select a league for team analytics</label>';
-        html += '<select id="anaLeagueSelect"><option value="">Choose league</option>';
-        if (!state.leagues.length) {
-          const home = await api('/api/today');
-          state.leagues = home.leagues || [];
-        }
-        state.leagues.forEach(l => html += `<option value="${l.id}">${l.name}</option>`);
-        html += '</select>';
+        let html = '<div class="card"><h2>Analytics</h2>';
+        html += '<div class="picker-hint" style="margin:-4px 0 10px">Pick a day, then a league</div>' + pickerHtml() + '</div>';
         setMainHtml(html);
-        $('#anaLeagueSelect').onchange = async (e) => {
-          state.leagueId = e.target.value;
-          localStorage.setItem('cahl-league', state.leagueId);
-          const data = await api(`/api/league/${state.leagueId}`);
-          state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
-          await loadAnalyticsContent(data);
-        };
         return;
       }
 
@@ -527,6 +580,7 @@ const $main = document.getElementById('main');
       if (!data || data.error) { $main.innerHTML = `<div class="error">${(data||{}).error || 'No data'}</div>`; return; }
 
       let html = `<div class="card"><h2>Analytics · ${data.league_name}</h2>`;
+      html += changeLeagueHtml();
 
       // Points leaders mini chart
       const maxPts = Math.max(...data.standings.map(s => s.pts), 1);
@@ -577,6 +631,28 @@ const $main = document.getElementById('main');
       e.preventDefault();
       setTab(a.dataset.tab);
     }));
+
+    // Delegated league-picker + change-league clicks
+    $main.addEventListener('click', async (e) => {
+      const chg = e.target.closest('[data-change-league]');
+      if (chg) {
+        state.leagueId = '';
+        localStorage.removeItem('cahl-league');
+        await loadActiveTab();
+        return;
+      }
+      const dayEl = e.target.closest('.day-pill');
+      if (dayEl) {
+        state.leagueDay = dayEl.dataset.day;
+        localStorage.setItem('cahl-league-day', state.leagueDay);
+        await loadActiveTab();
+        return;
+      }
+      const lidEl = e.target.closest('.league-pill');
+      if (lidEl) {
+        await chooseLeague(lidEl.dataset.lid);
+      }
+    });
 
     $refresh.addEventListener('click', refreshAll);
 
