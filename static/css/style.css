@@ -1320,6 +1320,12 @@ nav a.active, .nav-link.active {
   white-space: nowrap;
 }
 
+.my-team-star {
+  color: var(--warning);
+  border-color: rgba(176, 125, 0, 0.4);
+  background: rgba(176, 125, 0, 0.10);
+}
+
 .hero-line {
   display: flex;
   align-items: center;

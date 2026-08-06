@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 32;
+const JS_VERSION = 33;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -31,6 +31,8 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       leagueId: localStorage.getItem('cahl-league') || '',
       leagueDay: localStorage.getItem('cahl-league-day') || '',
       teamId: localStorage.getItem('cahl-team') || '',
+      // Your saved default team (drives the Today hero); teamId is just what you're browsing
+      myTeam: localStorage.getItem('cahl-myteam') || localStorage.getItem('cahl-team') || '',
       auto: false,
       leagues: [],
       teams: [],
@@ -296,6 +298,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     async function pickSearchedTeam(teamId, leagueId) {
       state.teamId = teamId;
       localStorage.setItem('cahl-team', teamId);
+      setMyTeam(teamId); // searching out a team and picking it = choosing your team
       if (leagueId) {
         state.leagueId = leagueId;
         localStorage.setItem('cahl-league', leagueId);
@@ -850,7 +853,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       syncLivePolling(data.today);
 
       let html = '';
-      if (state.teamId) {
+      if (state.myTeam) {
         html += '<div class="card hero-card" id="myTeamHero"><div class="empty">Loading your team\u2026</div></div>';
       } else {
         html += '<div class="card hero-card hero-cta"><div class="hero-cta-text">Set your team to see next game, last result, and record here</div>'
@@ -869,7 +872,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       html += '</div>';
       setMainHtml(html);
 
-      if (state.teamId) loadMyTeamHero(state.teamId, refresh);
+      if (state.myTeam) loadMyTeamHero(state.myTeam, refresh);
     }
 
     async function loadMyTeamHero(teamId, refresh=false) {
@@ -1390,6 +1393,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         $('#teamSelect').onchange = async (e) => {
           state.teamId = e.target.value;
           localStorage.setItem('cahl-team', state.teamId);
+          setMyTeam(e.target.value); // "Choose your team" is the explicit default-team action
           await loadTeamContent(state.teamId);
         };
         if (state.teamId) await loadTeamContent(state.teamId, refresh);
@@ -1433,9 +1437,14 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         return '';
       })();
 
+      const myTeamBadge = state.myTeam === teamId
+        ? '<span class="hero-rank my-team-star" title="Your saved team">\u2605 My Team</span>'
+        : `<button class="ghost small" onclick="makeMyTeam('${teamId}')" title="Save as your default team">Set as My Team</button>`;
+
       let html = `<div class="team-head">
         <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
         <div class="team-head-actions">
+          ${myTeamBadge}
           ${raceBadge}
           ${rank ? `<span class="hero-rank">${rank}${rankSuffix} of ${standings.length}</span>` : ''}
           <a class="ghost small btn-link" href="${icalUrl}" target="_blank" rel="noopener" title="Subscribe to this team's schedule in your calendar">iCal</a>
@@ -1789,11 +1798,26 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
     // Public helpers for inline event handlers
     window.setTab = setTab;
+    // Browsing a team (game rows, standings, compare) — does NOT change your saved team
     window.selectTeam = (teamId) => {
       if (!teamId) return;
       state.teamId = teamId;
-      localStorage.setItem('cahl-team', teamId);
       setTab('team');
+    };
+
+    function setMyTeam(teamId) {
+      state.myTeam = teamId;
+      localStorage.setItem('cahl-myteam', teamId);
+    }
+
+    // Explicitly save a team as "your team" (star button on team pages)
+    window.makeMyTeam = (teamId) => {
+      if (!teamId) return;
+      setMyTeam(teamId);
+      state.teamId = teamId;
+      localStorage.setItem('cahl-team', teamId);
+      showToast('Saved as your team');
+      loadTeamContent(teamId);
     };
     window.selectPlayer = (teamId, playerId) => {
       if (!teamId || !playerId) return;
