@@ -20,6 +20,16 @@ class Cache:
         self.ttl = ttl
         self.store = {}
 
+    def _effective_ttl(self):
+        """Shorter TTL during evening game hours (ET) so live scores stay fresh.
+        Still capped to keep scrape volume gentle on the source site."""
+        try:
+            from zoneinfo import ZoneInfo
+            et_hour = datetime.now(ZoneInfo("America/New_York")).hour
+        except Exception:
+            et_hour = (datetime.utcnow().hour - 4) % 24  # EDT fallback
+        return 20 if et_hour >= 18 else self.ttl
+
     def get(self, key):
         if key in self.store:
             value, exp = self.store[key]
@@ -29,7 +39,7 @@ class Cache:
         return None
 
     def set(self, key, value):
-        self.store[key] = (value, time.time() + self.ttl)
+        self.store[key] = (value, time.time() + self._effective_ttl())
 
     def clear(self):
         self.store.clear()

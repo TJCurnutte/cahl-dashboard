@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 30;
+const JS_VERSION = 32;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -696,7 +696,8 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       $refresh.disabled = true;
       $refresh.textContent = '';
       $refresh.appendChild(Object.assign(document.createElement('span'), { className: 'spinner' }));
-      await fetch('/api/refresh', { method: 'POST' });
+      // Light scope: clears page caches so scores/sheets refetch, keeps big aggregates warm
+      await fetch('/api/refresh?scope=scores', { method: 'POST' });
       state.cache = {};
       state._sessions = null;
       state.allTeams = [];
@@ -708,9 +709,38 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       showToast(`Updated ${t}`);
     }
 
+    // ---- Live game polling ----
+    function isLiveGame(g) {
+      const m = (g.time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (!m) return false;
+      let hh = parseInt(m[1], 10) % 12;
+      if (m[3].toUpperCase() === 'PM') hh += 12;
+      const start = new Date();
+      start.setHours(hh, parseInt(m[2], 10), 0, 0);
+      const now = new Date();
+      return now >= new Date(start.getTime() - 15 * 60000) && now < new Date(start.getTime() + 165 * 60000);
+    }
+
+    let livePollTimer = null;
+    function syncLivePolling(games) {
+      const anyLive = (games || []).some(isLiveGame);
+      document.body.classList.toggle('has-live', anyLive);
+      if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+      if (!anyLive) return;
+      // While any game is in its live window, refresh scores every 30s automatically
+      livePollTimer = setInterval(async () => {
+        try {
+          await fetch('/api/refresh?scope=scores', { method: 'POST' });
+          state.cache = {};
+          if (state.tab === 'today') await renderToday(true);
+        } catch (e) { /* next tick retries */ }
+      }, 30000);
+    }
+
     function setTab(tab) {
       state.tab = tab;
       navLinks.forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
+      if (tab !== 'today' && livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
       loadActiveTab();
       $main.focus({ preventScroll: true }); // move keyboard focus into content on tab switch
     }
@@ -771,6 +801,17 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       `;
     }
 
+    // Live tracker: only renders when at least one game is in its live window.
+    // Games still in progress get a LIVE badge; freshly-final games show the score.
+    function liveTrackerHtml(games) {
+      const live = (games || []).filter(isLiveGame);
+      if (!live.length) return '';
+      let html = '<div class="card live-tracker"><h2><span class="live-dot-inline" aria-hidden="true"></span>Live Now</h2>';
+      html += live.map(g => todayRowHtml(g)).join('');
+      html += '<div class="picker-hint">Auto-updating every 30s</div></div>';
+      return html;
+    }
+
     function todayRowHtml(g) {
       const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
       // A 0-0 line is the site's default for unplayed games, so it doesn't count as a score
@@ -806,6 +847,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const data = await api('/api/today', refresh);
       if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
       state.leagues = data.leagues;
+      syncLivePolling(data.today);
 
       let html = '';
       if (state.teamId) {
@@ -815,6 +857,9 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
           + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
       }
 
+      // Live tracker — only exists while games are actually in progress
+      html += liveTrackerHtml(data.today);
+
       html += '<div class="card today-card"><h2>Today\'s Games</h2>';
       if (!data.today.length) {
         html += '<div class="empty">No games posted yet.</div>';
@@ -822,9 +867,6 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         html += '<div class="today-list">' + data.today.map(todayRowHtml).join('') + '</div>';
       }
       html += '</div>';
-
-      html += '<div class="card"><h3>Leagues</h3>' + pickerHtml() +
-        '<div class="picker-hint">Pick a day, then a league</div></div>';
       setMainHtml(html);
 
       if (state.teamId) loadMyTeamHero(state.teamId, refresh);
@@ -2055,7 +2097,11 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       localStorage.setItem('cahl-auto', state.auto ? '1' : '');
       if (autoTimer) clearInterval(autoTimer);
       if (state.auto) {
-        autoTimer = setInterval(() => loadActiveTab(true), 60000);
+        autoTimer = setInterval(async () => {
+          await fetch('/api/refresh?scope=scores', { method: 'POST' }).catch(() => {});
+          state.cache = {};
+          loadActiveTab(true);
+        }, 30000);
       }
     });
 
@@ -2063,7 +2109,13 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     (() => {
       state.auto = !!localStorage.getItem('cahl-auto');
       $auto.checked = state.auto;
-      if (state.auto) autoTimer = setInterval(() => loadActiveTab(true), 60000);
+      if (state.auto) {
+        autoTimer = setInterval(async () => {
+          await fetch('/api/refresh?scope=scores', { method: 'POST' }).catch(() => {});
+          state.cache = {};
+          loadActiveTab(true);
+        }, 30000);
+      }
       setTab(state.tab);
       // Prefetch the big aggregates in the background so pickers are warm on arrival
       loadAllTeams();

@@ -147,6 +147,46 @@ header .controls {
   gap: 10px;
 }
 
+/* Live tracker card (Today tab) — only rendered while games are in progress */
+.live-tracker {
+  border-left: 3px solid var(--accent);
+}
+
+.live-tracker h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.live-dot-inline {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: 0 0 auto;
+  animation: live-dot-pulse 1.4s ease-in-out infinite;
+}
+
+/* Live game indicator dot (shows while any game is in progress) */
+.live-dot {
+  display: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(206, 17, 38, 0.5);
+  animation: live-dot-pulse 1.4s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+body.has-live .live-dot { display: inline-block; }
+
+@keyframes live-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(206, 17, 38, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(206, 17, 38, 0); }
+}
+
 .ver-badge {
   font-size: 10px;
   font-weight: 700;
