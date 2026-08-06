@@ -147,6 +147,79 @@ header .controls {
   gap: 10px;
 }
 
+/* Hockey scoreboard (Today tab) — active games only, minimized */
+.scoreboard { border-left: 3px solid var(--accent); }
+
+.scoreboard h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.sb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: var(--glass-bg-strong);
+}
+
+.sb-row:last-of-type { margin-bottom: 4px; }
+
+.sb-team {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sb-team.sb-away, .sb-row > .sb-team:last-child { text-align: right; }
+
+.sb-center {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 56px;
+}
+
+.sb-score {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.sb-live {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+.sb-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+@media (min-width: 900px) {
+  .scoreboard .sb-row { padding: 10px 16px; }
+  .sb-team { font-size: 15px; }
+  .sb-score { font-size: 22px; }
+}
+
 /* Live tracker card (Today tab) — only rendered while games are in progress */
 .live-tracker {
   border-left: 3px solid var(--accent);

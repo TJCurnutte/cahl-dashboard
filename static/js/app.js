@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 35;
+const JS_VERSION = 36;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -805,13 +805,23 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       `;
     }
 
-    // Live tracker: only renders when at least one game is in its live window.
-    // Games still in progress get a LIVE badge; freshly-final games show the score.
-    function liveTrackerHtml(games) {
-      const live = (games || []).filter(isLiveGame);
-      if (!live.length) return '';
-      let html = '<div class="card live-tracker"><h2><span class="live-dot-inline" aria-hidden="true"></span>Live Now</h2>';
-      html += live.map(g => todayRowHtml(g)).join('');
+    // Hockey scoreboard: one compact card per active game (team — score/LIVE — team).
+    // Only renders while games are actually in their live window.
+    function scoreboardHtml(games) {
+      const active = (games || []).filter(isLiveGame);
+      if (!active.length) return '';
+      let html = '<div class="card scoreboard"><h2><span class="live-dot-inline" aria-hidden="true"></span>Live Now</h2>';
+      html += active.map(g => {
+        const scored = g.played && (g.home_score || g.away_score);
+        const center = scored
+          ? `<span class="sb-score">${g.home_score}\u2013${g.away_score}</span>`
+          : '<span class="sb-live">LIVE</span>';
+        return `<div class="sb-row">
+          <div class="sb-team link" onclick="selectTeam('${g.home_id || ''}')">${esc(g.home)}</div>
+          <div class="sb-center">${center}<span class="sb-meta">${fmtTime(g.time)} \u00b7 ${esc((g.facility || '').replace(/^Chiller\s+/i, ''))}</span></div>
+          <div class="sb-team sb-away link" onclick="selectTeam('${g.away_id || ''}')">${esc(g.away)}</div>
+        </div>`;
+      }).join('');
       html += '<div class="picker-hint">Auto-updating every 30s</div></div>';
       return html;
     }
@@ -856,16 +866,18 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
           + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
       }
 
-      // Live tracker — only exists while games are actually in progress
-      html += liveTrackerHtml(state.todayGames);
-
-      html += '<div class="card today-card"><h2>Today\'s Games</h2>';
-      if (!state.todayGames.length) {
-        html += '<div class="empty">No games posted yet.</div>';
+      // Hockey scoreboard of active games when any are live; otherwise the full day schedule
+      if (state.todayGames.some(isLiveGame)) {
+        html += scoreboardHtml(state.todayGames);
       } else {
-        html += '<div class="today-list">' + state.todayGames.map(todayRowHtml).join('') + '</div>';
+        html += '<div class="card today-card"><h2>Today\'s Games</h2>';
+        if (!state.todayGames.length) {
+          html += '<div class="empty">No games posted yet.</div>';
+        } else {
+          html += '<div class="today-list">' + state.todayGames.map(todayRowHtml).join('') + '</div>';
+        }
+        html += '</div>';
       }
-      html += '</div>';
       return html;
     }
 
