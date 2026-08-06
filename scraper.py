@@ -3,7 +3,7 @@ import time
 import unicodedata
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import unescape
 
 BASE_URL = "http://www.chillerstats.com"
@@ -892,6 +892,15 @@ def parse_all_teams(max_workers=8):
     return sorted(teams.values(), key=lambda t: t["name"].lower()), None
 
 
+def _et_now():
+    """Current time in America/New_York (games are ET; server clocks may be UTC)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/New_York"))
+    except Exception:
+        return datetime.utcnow() - timedelta(hours=4)  # EDT fallback
+
+
 def enrich_today_scores(home_data, max_workers=8):
     """Fill scores for today's games.
 
@@ -906,8 +915,8 @@ def enrich_today_scores(home_data, max_workers=8):
     if not games:
         return
 
-    today_label = datetime.now().strftime("%b %-d")  # e.g. "Aug 5"
-    now = datetime.now()
+    now = _et_now()
+    today_label = now.strftime("%b %-d")  # e.g. "Aug 5"
 
     def game_started(g):
         t = g.get("time", "")
