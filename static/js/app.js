@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 36;
+const JS_VERSION = 37;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -714,16 +714,25 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     }
 
     // ---- Live game polling ----
-    function isLiveGame(g) {
+    // Game state: 'upcoming' | 'live' | 'final'. A game with a posted score that is
+    // well past its expected end (~2h15m; games run ~75-90min) is final, not live.
+    function gameLiveState(g) {
       const m = (g.time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-      if (!m) return false;
+      if (!m) return 'upcoming';
       let hh = parseInt(m[1], 10) % 12;
       if (m[3].toUpperCase() === 'PM') hh += 12;
       const start = new Date();
       start.setHours(hh, parseInt(m[2], 10), 0, 0);
       const now = new Date();
-      return now >= new Date(start.getTime() - 15 * 60000) && now < new Date(start.getTime() + 165 * 60000);
+      const scored = g.played && (g.home_score || g.away_score);
+      if (now < new Date(start.getTime() - 15 * 60000)) return 'upcoming';
+      if (now >= new Date(start.getTime() + 180 * 60000)) return 'final'; // hard window end
+      if (scored && now >= new Date(start.getTime() + 135 * 60000)) return 'final';
+      return 'live';
     }
+
+    // Polling trigger: any game currently live
+    function isLiveGame(g) { return gameLiveState(g) === 'live'; }
 
     let livePollTimer = null;
     function syncLivePolling(games) {
@@ -830,24 +839,15 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
       // A 0-0 line is the site's default for unplayed games, so it doesn't count as a score
       const hasScore = g.played && (g.home_score || g.away_score);
+      const st = gameLiveState(g);
 
-      // Game started but no final posted yet -> treat as live (within a 3h window)
-      let live = false;
-      if (!hasScore && g.time) {
-        const m = g.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-        if (m) {
-          let hh = parseInt(m[1], 10) % 12;
-          if (m[3].toUpperCase() === 'PM') hh += 12;
-          const start = new Date();
-          start.setHours(hh, parseInt(m[2], 10), 0, 0);
-          const now = new Date();
-          live = now >= start && now < new Date(start.getTime() + 3 * 60 * 60 * 1000);
-        }
+      let scoreHtml;
+      if (hasScore) {
+        scoreHtml = `<span class="t-score">${g.home_score}\u2013${g.away_score}</span>`
+          + (st === 'final' ? '<span class="final-chip">FINAL</span>' : '');
+      } else {
+        scoreHtml = st === 'live' ? '<span class="t-score live-badge">LIVE</span>' : '';
       }
-
-      const scoreHtml = hasScore
-        ? `<span class="t-score">${g.home_score}\u2013${g.away_score}</span>`
-        : (live ? '<span class="t-score live-badge">LIVE</span>' : '');
 
       return `<div class="today-row">
         <span class="t-time">${fmtTime(g.time)}</span>
@@ -866,9 +866,15 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
           + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
       }
 
-      // Hockey scoreboard of active games when any are live; otherwise the full day schedule
-      if (state.todayGames.some(isLiveGame)) {
-        html += scoreboardHtml(state.todayGames);
+      // Hockey scoreboard of live games; finals + upcoming stay visible in a compact strip
+      const liveNow = state.todayGames.filter(isLiveGame);
+      const rest = state.todayGames.filter(g => !isLiveGame(g));
+      if (liveNow.length) {
+        html += scoreboardHtml(liveNow);
+        if (rest.length) {
+          html += '<div class="card today-card"><h2>Rest of Tonight</h2>'
+            + '<div class="today-list">' + rest.map(todayRowHtml).join('') + '</div></div>';
+        }
       } else {
         html += '<div class="card today-card"><h2>Today\'s Games</h2>';
         if (!state.todayGames.length) {
