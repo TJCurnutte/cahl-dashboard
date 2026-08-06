@@ -17,7 +17,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Install deps
+        run: pip install -q requests beautifulsoup4
       - name: Refresh CAHL caches
         env:
           BASE_URL: https://cahl.neural-forge.io
         run: python3 .github/scripts/refresh_cache.py
+      - name: Verify API data vs chillerstats.com
+        env:
+          BASE_URL: https://cahl.neural-forge.io
+        run: python3 .github/scripts/verify_data.py

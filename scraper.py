@@ -62,6 +62,10 @@ def get_soup(path):
             resp = session.get(_url(path), timeout=30)
             resp.raise_for_status()
             text = resp.text
+            # Throttle/error pages are tiny; real pages are tens of KB.
+            # Never cache a suspicious page — that poisons every downstream parse.
+            if len(text) < 2000:
+                return None, f"Suspiciously short page ({len(text)} bytes): {path}"
             cache.set(key, text)
         except Exception as e:
             return None, str(e)
