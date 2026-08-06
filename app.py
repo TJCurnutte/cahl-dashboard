@@ -41,15 +41,37 @@ def index():
 
 @app.route("/api/today")
 def today():
+    # Fast path: homepage only. Scores come from /api/today/scores so the page
+    # paints immediately instead of waiting on 30 dashboard fetches.
     data, err = scraper.parse_homepage()
     if err:
         return jsonify({"error": err}), 502
-    # Fill in scores for tonight's games once they've started (uses cached schedules)
-    try:
-        scraper.enrich_today_scores(data)
-    except Exception:
-        pass  # scores are best-effort; schedule still renders
     return jsonify(data)
+
+
+@app.route("/api/today/scores")
+def today_scores():
+    """Live/final scores for today's games (separate slower path).
+    Uses the warm teams cache to fetch only game-night dashboards; cold starts
+    fall back to all leagues, soft-timed so the endpoint always answers."""
+    data, err = scraper.parse_homepage()
+    if err:
+        return jsonify({"error": err}), 502
+    try:
+        league_ids = None
+        if _TEAMS_CACHE["data"]:
+            by_id = {t["id"]: t["league_id"] for t in _TEAMS_CACHE["data"]}
+            league_ids = set()
+            for g in data.get("today", []):
+                for tid in (g.get("home_id"), g.get("away_id")):
+                    if tid in by_id:
+                        league_ids.add(by_id[tid])
+            if not league_ids:
+                league_ids = None
+        scraper.enrich_today_scores(data, league_ids=league_ids, timeout=45)
+    except Exception as e:
+        print(f"[today_scores] enrich failed: {e}")  # never swallow silently
+    return jsonify({"games": data.get("today", [])})
 
 
 @app.route("/api/leaders")

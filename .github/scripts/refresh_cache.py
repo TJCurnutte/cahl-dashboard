@@ -84,7 +84,10 @@ def main():
 
     post("/api/refresh?scope=scores")
 
-    for path in ["/api/today", "/api/leaders"]:
+    warm = ["/api/today", "/api/leaders"]
+    if active:
+        warm.append("/api/today/scores")  # keep the live-scores path warm too
+    for path in warm:
         t0 = datetime.now()
         try:
             get(path)

@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from html import unescape
 
-BASE_URL = "http://www.chillerstats.com"
+BASE_URL = "https://www.chillerstats.com"  # site now 302-redirects http -> https; go direct
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 }
@@ -901,15 +901,16 @@ def _et_now():
         return datetime.utcnow() - timedelta(hours=4)  # EDT fallback
 
 
-def enrich_today_scores(home_data, max_workers=8):
+def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None):
     """Fill scores for today's games.
 
     Primary source: league dashboard Recent Results, which update LIVE as
     scorekeepers enter goals (real-time scoring). Fallback: team schedule pages
     (finals only). Matches by today's date + both team IDs. Games that haven't
-    started yet are left without scores.
+    started yet are left without scores. league_ids optionally scopes which
+    dashboards to fetch (only leagues with games today); None = all leagues.
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent import futures as cf
 
     games = home_data.get("today", [])
     if not games:
@@ -938,16 +939,21 @@ def enrich_today_scores(home_data, max_workers=8):
         src_g["away_score"] = as_
         src_g["played"] = True
 
-    # 1) Live source: every league dashboard's recent results (real-time scores)
+    # 1) Live source: recent results from dashboards of leagues with games today.
+    # Soft-timed so the endpoint always answers; whatever completed gets matched.
+    if league_ids is None:
+        league_ids = {l["id"] for l in home_data.get("leagues", [])}
     dashboards = {}
 
-    def fetch_dash(league):
-        d, e = parse_dashboard(league["id"])
+    def fetch_dash(lid):
+        d, e = parse_dashboard(lid)
         if not e:
-            dashboards[league["id"]] = d
+            dashboards[lid] = d
 
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        list(ex.map(fetch_dash, home_data.get("leagues", [])))
+    ex = cf.ThreadPoolExecutor(max_workers=max_workers)
+    futs = [ex.submit(fetch_dash, lid) for lid in league_ids]
+    done, pending = cf.wait(futs, timeout=timeout)
+    ex.shutdown(wait=False, cancel_futures=True)
 
     for g in started:
         ids = {g.get("home_id"), g.get("away_id")}
@@ -974,7 +980,7 @@ def enrich_today_scores(home_data, max_workers=8):
             if not e and sched:
                 schedules[tid] = sched
 
-        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        with cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
             list(ex.map(fetch, team_ids))
 
         for g in missing:

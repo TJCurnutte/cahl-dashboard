@@ -5,7 +5,7 @@ window.addEventListener('pageshow', e => {
 });
 
 // Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 34;
+const JS_VERSION = 35;
 if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
   sessionStorage.setItem('vresync', '1');
   location.reload();
@@ -53,6 +53,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       calMonth: '',
       calDay: '',
       leaders: null,
+      todayGames: [],
       cache: {}
     };
 
@@ -735,7 +736,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         try {
           await fetch('/api/refresh?scope=scores', { method: 'POST' });
           state.cache = {};
-          if (state.tab === 'today') await renderToday(true);
+          await loadTodayScores(true); // light: only the game-night dashboards
         } catch (e) { /* next tick retries */ }
       }, 30000);
     }
@@ -846,12 +847,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       </div>`;
     }
 
-    async function renderToday(refresh) {
-      const data = await api('/api/today', refresh);
-      if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
-      state.leagues = data.leagues;
-      syncLivePolling(data.today);
-
+    function todayPageHtml(data) {
       let html = '';
       if (state.myTeam) {
         html += '<div class="card hero-card" id="myTeamHero"><div class="empty">Loading your team\u2026</div></div>';
@@ -861,16 +857,47 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       }
 
       // Live tracker — only exists while games are actually in progress
-      html += liveTrackerHtml(data.today);
+      html += liveTrackerHtml(state.todayGames);
 
       html += '<div class="card today-card"><h2>Today\'s Games</h2>';
-      if (!data.today.length) {
+      if (!state.todayGames.length) {
         html += '<div class="empty">No games posted yet.</div>';
       } else {
-        html += '<div class="today-list">' + data.today.map(todayRowHtml).join('') + '</div>';
+        html += '<div class="today-list">' + state.todayGames.map(todayRowHtml).join('') + '</div>';
       }
       html += '</div>';
-      setMainHtml(html);
+      return html;
+    }
+
+    // Fill scores from the separate (slower) scores endpoint and re-render.
+    async function loadTodayScores(force=false) {
+      const data = await api('/api/today/scores', force);
+      if (data.error || !data.games) return;
+      // merge by both team ids
+      const byIds = {};
+      data.games.forEach(g => { byIds[`${g.home_id}|${g.away_id}`] = g; });
+      state.todayGames.forEach(g => {
+        const s = byIds[`${g.home_id}|${g.away_id}`];
+        if (s && s.played) {
+          g.home_score = s.home_score;
+          g.away_score = s.away_score;
+          g.home_periods = s.home_periods;
+          g.away_periods = s.away_periods;
+          g.played = true;
+        }
+      });
+      syncLivePolling(state.todayGames);
+      if (state.tab === 'today') setMainHtml(todayPageHtml());
+    }
+
+    async function renderToday(refresh) {
+      const data = await api('/api/today', refresh);
+      if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      state.leagues = data.leagues;
+      state.todayGames = data.today;
+      syncLivePolling(state.todayGames);
+      setMainHtml(todayPageHtml());
+      loadTodayScores(refresh); // async — scores fill in after first paint
 
       if (state.myTeam) loadMyTeamHero(state.myTeam, refresh);
     }
