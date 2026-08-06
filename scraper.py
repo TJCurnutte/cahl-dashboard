@@ -893,12 +893,12 @@ def parse_all_teams(max_workers=8):
 
 
 def enrich_today_scores(home_data, max_workers=8):
-    """Fill scores for today's games by cross-referencing team schedules.
+    """Fill scores for today's games.
 
-    The homepage lists tonight's matchups without scores; each team's schedule
-    page has the final score once the game is played. We fetch the involved
-    teams' schedules in parallel and match games by date + both team IDs.
-    Games that haven't started yet are left without scores.
+    Primary source: league dashboard Recent Results, which update LIVE as
+    scorekeepers enter goals (real-time scoring). Fallback: team schedule pages
+    (finals only). Matches by today's date + both team IDs. Games that haven't
+    started yet are left without scores.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -920,33 +920,66 @@ def enrich_today_scores(home_data, max_workers=8):
         start = now.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
         return now >= start
 
-    # Only fetch schedules for games that have actually started
     started = [g for g in games if game_started(g)]
     if not started:
         return
 
-    team_ids = {tid for g in started for tid in (g.get("home_id"), g.get("away_id")) if tid}
+    def _attach(src_g, hs, as_):
+        src_g["home_score"] = hs
+        src_g["away_score"] = as_
+        src_g["played"] = True
 
-    schedules = {}
+    # 1) Live source: every league dashboard's recent results (real-time scores)
+    dashboards = {}
 
-    def fetch(tid):
-        sched, e = parse_team_schedule(tid)
-        if not e and sched:
-            schedules[tid] = sched
+    def fetch_dash(league):
+        d, e = parse_dashboard(league["id"])
+        if not e:
+            dashboards[league["id"]] = d
 
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        list(ex.map(fetch, team_ids))
+        list(ex.map(fetch_dash, home_data.get("leagues", [])))
 
     for g in started:
-        for tid in (g.get("home_id"), g.get("away_id")):
-            for s in schedules.get(tid, []):
-                if s["date"] != today_label or not s.get("played"):
+        ids = {g.get("home_id"), g.get("away_id")}
+        for d in dashboards.values():
+            for r in d.get("recent", []):
+                if r.get("date") != today_label:
                     continue
-                if {s.get("home_id"), s.get("away_id")} == {g.get("home_id"), g.get("away_id")}:
-                    g["home_score"] = s["home_score"]
-                    g["away_score"] = s["away_score"]
-                    g["played"] = True
+                if {r.get("home_id"), r.get("away_id")} == ids:
+                    hs, as_ = r.get("home_final", 0), r.get("away_final", 0)
+                    if hs or as_:
+                        _attach(g, hs, as_)
+                        g["home_periods"] = r.get("home_periods")
+                        g["away_periods"] = r.get("away_periods")
                     break
+
+    # 2) Fallback for finals the dashboards don't cover: team schedule pages
+    missing = [g for g in started if not g.get("played")]
+    if missing:
+        team_ids = {tid for g in missing for tid in (g.get("home_id"), g.get("away_id")) if tid}
+        schedules = {}
+
+        def fetch(tid):
+            sched, e = parse_team_schedule(tid)
+            if not e and sched:
+                schedules[tid] = sched
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            list(ex.map(fetch, team_ids))
+
+        for g in missing:
+            for tid in (g.get("home_id"), g.get("away_id")):
+                for s in schedules.get(tid, []):
+                    if s["date"] != today_label or not s.get("played"):
+                        continue
+                    if {s.get("home_id"), s.get("away_id")} == ids_of(g):
+                        _attach(g, s["home_score"], s["away_score"])
+                        break
+
+
+def ids_of(g):
+    return {g.get("home_id"), g.get("away_id")}
 
 
 def _normalize_session_date(s):
