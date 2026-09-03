@@ -13,6 +13,15 @@ HEADERS = {
 
 session = requests.Session()
 session.headers.update(HEADERS)
+# Fan-out searches run up to 24 concurrent workers; the default 10-connection
+# pool discards connections under that load (slow lookups, warning spam).
+try:
+    from requests.adapters import HTTPAdapter
+    _pool = HTTPAdapter(pool_connections=32, pool_maxsize=32)
+    session.mount("https://", _pool)
+    session.mount("http://", _pool)
+except Exception:
+    pass
 
 
 class Cache:
@@ -28,7 +37,9 @@ class Cache:
             et_hour = datetime.now(ZoneInfo("America/New_York")).hour
         except Exception:
             et_hour = (datetime.utcnow().hour - 4) % 24  # EDT fallback
-        return 20 if et_hour >= 18 else self.ttl
+        # Game nights often start ~5pm ET; keep scrape cache very short so
+        # /api/today/scores doesn't serve a minute-old scoreboard.
+        return 8 if et_hour >= 17 else self.ttl
 
     def get(self, key):
         if key in self.store:
@@ -54,12 +65,12 @@ def _url(path):
     return f"{BASE_URL}/{path.lstrip('/')}"
 
 
-def get_soup(path):
+def get_soup(path, fresh=False, timeout=30):
     key = f"html:{path}"
-    text = cache.get(key)
+    text = None if fresh else cache.get(key)
     if text is None:
         try:
-            resp = session.get(_url(path), timeout=30)
+            resp = session.get(_url(path), timeout=timeout)
             resp.raise_for_status()
             text = resp.text
             # Throttle/error pages are tiny; real pages are tens of KB.
@@ -86,15 +97,66 @@ def _extract_id(href, field):
     if not href:
         return None
     m = re.search(rf"{field}=([^&\"]+)", href)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    val = m.group(1)
+    # IDs flow into onclick="selectTeam('...')" templates in app.js; only
+    # alphanumerics ever appear in real chillerstats IDs (opaque tokens run
+    # 32-128 chars). Dropping anything else keeps quotes/HTML out of
+    # attribute context at the source.
+    return val if re.fullmatch(r"[A-Za-z0-9_-]{1,200}", val) else None
+
+
+def _query_token(href):
+    """Bare opaque token after ? (chillerstats dropped named LeagueID/TeamID params)."""
+    if not href or "?" not in href:
+        return None
+    q = href.split("?", 1)[1].split("#", 1)[0]
+    first = q.split("&")[0].strip()
+    if first and "=" not in first and re.fullmatch(r"[A-Za-z0-9_-]{1,200}", first):
+        return first
+    return None
+
+
+def _is_opaque_id(ident):
+    return bool(re.fullmatch(r"[A-Fa-f0-9]{32,}", str(ident or "")))
+
+
+def _resource_qs(legacy_param, ident):
+    ident = str(ident or "")
+    if _is_opaque_id(ident):
+        return ident
+    return f"{legacy_param}={ident}"
 
 
 def _team_id(href):
-    return _extract_id(href, "TeamID")
+    named = _extract_id(href, "TeamID")
+    if named:
+        return named
+    if not href:
+        return None
+    low = href.lower()
+    if "/team/" in low or low.startswith("team/") or "team/index.cfm" in low:
+        return _query_token(href)
+    return None
+
+
+def _league_id(href):
+    named = _extract_id(href, "LeagueID")
+    if named:
+        return named
+    if href and "dashboard.cfm" in href.lower():
+        return _query_token(href)
+    return None
 
 
 def _player_id(href):
-    return _extract_id(href, "PlayerID")
+    named = _extract_id(href, "PlayerID")
+    if named:
+        return named
+    if href and "player_history.cfm" in href.lower():
+        return _query_token(href)
+    return None
 
 
 def _score_to_int(s):
@@ -175,8 +237,8 @@ def parse_homepage():
     seen = set()
     for a in soup.find_all("a", href=True):
         href = a["href"]
-        if "dashboard.cfm?LeagueID=" in href:
-            lid = _extract_id(href, "LeagueID")
+        if "dashboard.cfm?" in href:
+            lid = _league_id(href)
             if lid and lid not in seen:
                 seen.add(lid)
                 txt = _text(a)
@@ -184,6 +246,25 @@ def parse_homepage():
                     "id": lid,
                     "name": txt,
                 })
+
+    # Drop scrimmage/practice slots entirely — chillerstats auto-creates
+    # placeholder "teams" (literally "Team Blue" vs "Team Red") for unrostered
+    # pickup ice. They have no rosters, no standings, no stats; the owner wants
+    # them off the board.
+    def _is_scrim_slot(home, away):
+        pat = re.compile(
+            r"^team\s+(blue|red|white|black|grey|gray|gold|green|navy|silver|teal|orange|yellow|purple|home|away)$",
+            re.IGNORECASE)
+        return bool(pat.match((home or "").strip()) and pat.match((away or "").strip()))
+
+    today = [g for g in today if not _is_scrim_slot(g.get("home"), g.get("away"))]
+
+    # Schedule placeholders like "Bye Week vs Brew Jackets" are not games —
+    # a team's bye shows up as an opponent on chillerstats' slate.
+    _bye = re.compile(r"^bye\s+week$", re.IGNORECASE)
+    today = [g for g in today
+             if not (_bye.match((g.get("home") or "").strip())
+                     or _bye.match((g.get("away") or "").strip()))]
 
     return {"today": today, "leagues": leagues}, None
 
@@ -282,8 +363,8 @@ def _parse_games_section(soup, section_heading):
     return games
 
 
-def parse_dashboard(league_id):
-    soup, err = get_soup(f"/dashboard.cfm?LeagueID={league_id}")
+def parse_dashboard(league_id, fresh=False):
+    soup, err = get_soup("/dashboard.cfm?" + _resource_qs("LeagueID", league_id), fresh=fresh)
     if err:
         return None, err
 
@@ -367,7 +448,7 @@ def parse_dashboard(league_id):
                 if not text_div:
                     # Fallback: choose the div that contains the game links
                     for c in row.find_all("div", recursive=False):
-                        if c.find("a", href=re.compile(r"TeamID=")):
+                        if c.find("a", href=re.compile(r"TeamID=|/team/|team/index\.cfm", re.I)):
                             text_div = c
                             break
                 if not text_div:
@@ -505,6 +586,8 @@ def parse_dashboard(league_id):
     if m:
         playoff_cutoff = int(m.group(1))
 
+    championship = extract_championship(playoffs, season, league_name)
+
     return {
         "league_name": league_name,
         "season": season,
@@ -514,17 +597,22 @@ def parse_dashboard(league_id):
         "recent": recent,
         "playoffs": playoffs,
         "playoff_cutoff": playoff_cutoff,
+        "championship": championship,
     }, None
 
 
 def parse_team_overview(team_id):
-    soup, err = get_soup(f"/team/?TeamID={team_id}")
+    soup, err = get_soup("/team/?" + _resource_qs("TeamID", team_id))
     if err:
         return None, err
 
     h1 = soup.find("h1")
     team_name = _text(h1) if h1 else ""
     team_name_core = team_name.replace(" Hockey", "").strip()
+    season = ""
+    breadcrumb = soup.find("ol", class_="breadcrumb")
+    if breadcrumb:
+        season = _text(breadcrumb.find("li", class_="active") or breadcrumb.find("li"))
 
     def _team_or_self(cell, team_id):
         link = cell.find("a", href=True)
@@ -628,14 +716,15 @@ def parse_team_overview(team_id):
     return {
         "team_name": team_name,
         "team_name_core": team_name_core,
+        "season": season,
         "next_game": next_game,
         "recent_result": recent,
         "team_leaders": team_leaders,
     }, None
 
 
-def parse_team_schedule(team_id):
-    soup, err = get_soup(f"/team/schedule.cfm?TeamID={team_id}")
+def parse_team_schedule(team_id, fresh=False):
+    soup, err = get_soup("/team/schedule.cfm?" + _resource_qs("TeamID", team_id), fresh=fresh)
     if err:
         return None, err
 
@@ -717,14 +806,14 @@ def _num(s):
             return 0
 
 
-def parse_team_stats(team_id):
+def parse_team_stats(team_id, timeout=30):
     """Full roster: every stat table on the page, grouped by section heading.
 
     The stats page groups players into sections (e.g. an unlabeled skaters
     table, FORWARDS, DEFENSE) and a GOALIES table with W/L/OTL/GA/GAA.
     Returns {"sections": [{label, players}], "goalies": [...]}.
     """
-    soup, err = get_soup(f"/team/stats.cfm?TeamID={team_id}")
+    soup, err = get_soup("/team/stats.cfm?" + _resource_qs("TeamID", team_id), timeout=timeout)
     if err:
         return None, err
 
@@ -787,7 +876,7 @@ def parse_team_stats(team_id):
 
 
 def parse_team_standings(team_id):
-    soup, err = get_soup(f"/team/standings.cfm?TeamID={team_id}")
+    soup, err = get_soup("/team/standings.cfm?" + _resource_qs("TeamID", team_id))
     if err:
         return None, err
 
@@ -835,10 +924,21 @@ def _parse_player_history_soup(soup):
             cells = row.find_all("td")
             if len(cells) < 11:
                 continue
+            team_link = cells[2].find("a", href=True)
+            team_token = _query_token(team_link["href"]) if team_link else None
+            season_sort = 0
+            ds = cells[0].get("data-sort")
+            if ds:
+                try:
+                    season_sort = int(str(ds).split(".")[0])
+                except ValueError:
+                    season_sort = 0
             history.append({
                 "season": _text(cells[0]),
                 "league": _text(cells[1]),
                 "team": _text(cells[2]),
+                "team_token": team_token,
+                "season_sort": season_sort,
                 "gp": _score_to_int(_text(cells[3])),
                 "g": _score_to_int(_text(cells[4])),
                 "a": _score_to_int(_text(cells[5])),
@@ -854,19 +954,23 @@ def _parse_player_history_soup(soup):
     return {"name": name, "history": history}
 
 
-def parse_all_teams(max_workers=8):
+def parse_all_teams(max_workers=8, timeout=50):
     """Aggregate every team across all leagues (for global team search).
 
     Fetches each league dashboard in parallel and pulls teams from standings.
-    Returns a list of {id, name, league_id, league_name, day}.
+    Returns a list of {id, name, league_id, league_name}.
+    Soft-times out so /api/teams always answers inside the function limit.
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
     home, err = parse_homepage()
     if err:
         return None, err
 
     leagues = home.get("leagues", [])
+    if not leagues:
+        return None, "No leagues listed on the homepage"
+
     teams = {}
     errors = []
 
@@ -886,11 +990,15 @@ def parse_all_teams(max_workers=8):
                     "league_name": league["name"],
                 }
 
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        list(ex.map(fetch, leagues))
+    ex = ThreadPoolExecutor(max_workers=max_workers)
+    futures = [ex.submit(fetch, league) for league in leagues]
+    wait(futures, timeout=timeout, return_when=ALL_COMPLETED)
+    ex.shutdown(wait=False, cancel_futures=True)
 
     if not teams and errors:
         return None, "; ".join(errors[:3])
+    if not teams:
+        return None, "No teams found (league standings empty or still loading)"
 
     # Sort alphabetically for stable UI
     return sorted(teams.values(), key=lambda t: t["name"].lower()), None
@@ -905,7 +1013,46 @@ def _et_now():
         return datetime.utcnow() - timedelta(hours=4)  # EDT fallback
 
 
-def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None):
+def _md_label(dt):
+    """Portable 'Aug 5' label (strftime %-d is POSIX-only)."""
+    return dt.strftime("%b ") + str(dt.day)
+
+
+def _game_start_et(time_str, now):
+    m = re.match(r"(\d{1,2}):(\d{2})\s*(AM|PM)", time_str or "", re.IGNORECASE)
+    if not m:
+        return None
+    hh = int(m.group(1)) % 12
+    if m.group(3).upper() == "PM":
+        hh += 12
+    return now.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
+
+
+def classify_game_status(g, now=None):
+    """upcoming | live | final. Beer-league ice slots are ~60-75 min.
+
+    Finished games must not stay LIVE: scores from a team schedule are finals,
+    and anything past ~85 minutes with a posted score (or ~100 min hard cap)
+    is treated as final even if Recent Results still lists it.
+    """
+    now = now or _et_now()
+    start = _game_start_et(g.get("time"), now)
+    if g.get("is_final"):
+        return "final"
+    if start is None:
+        return "final" if g.get("played") else "upcoming"
+    mins = (now - start).total_seconds() / 60.0
+    scored = bool(g.get("played")) and g.get("home_score") is not None
+    if mins < -10:
+        return "upcoming"
+    if mins >= 100:
+        return "final"
+    if scored and mins >= 85:
+        return "final"
+    return "live"
+
+
+def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None, fresh=False):
     """Fill scores for today's games.
 
     Primary source: league dashboard Recent Results, which update LIVE as
@@ -913,6 +1060,7 @@ def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None)
     (finals only). Matches by today's date + both team IDs. Games that haven't
     started yet are left without scores. league_ids optionally scopes which
     dashboards to fetch (only leagues with games today); None = all leagues.
+    fresh=True bypasses the HTML cache (used by /api/today/scores).
     """
     from concurrent import futures as cf
 
@@ -921,27 +1069,22 @@ def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None)
         return
 
     now = _et_now()
-    today_label = now.strftime("%b %-d")  # e.g. "Aug 5"
+    today_label = _md_label(now)
 
     def game_started(g):
-        t = g.get("time", "")
-        m = re.match(r"(\d{1,2}):(\d{2})\s*(AM|PM)", t, re.IGNORECASE)
-        if not m:
+        start = _game_start_et(g.get("time"), now)
+        if start is None:
             return True  # unknown time — don't block scores
-        hh = int(m.group(1)) % 12
-        if m.group(3).upper() == "PM":
-            hh += 12
-        start = now.replace(hour=hh, minute=int(m.group(2)), second=0, microsecond=0)
         return now >= start
 
     started = [g for g in games if game_started(g)]
-    if not started:
-        return
 
-    def _attach(src_g, hs, as_):
+    def _attach(src_g, hs, as_, *, is_final=False):
         src_g["home_score"] = hs
         src_g["away_score"] = as_
         src_g["played"] = True
+        if is_final:
+            src_g["is_final"] = True
 
     # 1) Live source: recent results from dashboards of leagues with games today.
     # Soft-timed so the endpoint always answers; whatever completed gets matched.
@@ -950,51 +1093,66 @@ def enrich_today_scores(home_data, max_workers=8, league_ids=None, timeout=None)
     dashboards = {}
 
     def fetch_dash(lid):
-        d, e = parse_dashboard(lid)
+        d, e = parse_dashboard(lid, fresh=fresh)
         if not e:
             dashboards[lid] = d
 
-    ex = cf.ThreadPoolExecutor(max_workers=max_workers)
-    futs = [ex.submit(fetch_dash, lid) for lid in league_ids]
-    done, pending = cf.wait(futs, timeout=timeout)
-    ex.shutdown(wait=False, cancel_futures=True)
+    if started and league_ids:
+        ex = cf.ThreadPoolExecutor(max_workers=max_workers)
+        futs = [ex.submit(fetch_dash, lid) for lid in league_ids]
+        done, pending = cf.wait(futs, timeout=timeout)
+        ex.shutdown(wait=False, cancel_futures=True)
 
-    for g in started:
-        ids = {g.get("home_id"), g.get("away_id")}
-        for d in dashboards.values():
-            for r in d.get("recent", []):
-                if r.get("date") != today_label:
-                    continue
-                if {r.get("home_id"), r.get("away_id")} == ids:
-                    hs, as_ = r.get("home_final", 0), r.get("away_final", 0)
-                    if hs or as_:
+        for g in started:
+            ids = {g.get("home_id"), g.get("away_id")}
+            for d in dashboards.values():
+                for r in d.get("recent", []):
+                    if r.get("date") != today_label:
+                        continue
+                    if {r.get("home_id"), r.get("away_id")} == ids:
+                        hs, as_ = r.get("home_final", 0), r.get("away_final", 0)
+                        # Attach even 0-0 — Recent Results listing means scoring started.
                         _attach(g, hs, as_)
                         g["home_periods"] = r.get("home_periods")
                         g["away_periods"] = r.get("away_periods")
-                    break
+                        break
 
     # 2) Fallback for finals the dashboards don't cover: team schedule pages
     missing = [g for g in started if not g.get("played")]
     if missing:
         team_ids = {tid for g in missing for tid in (g.get("home_id"), g.get("away_id")) if tid}
         schedules = {}
+        import threading as _threading
+        sched_lock = _threading.Lock()
 
         def fetch(tid):
-            sched, e = parse_team_schedule(tid)
+            sched, e = parse_team_schedule(tid, fresh=fresh)
             if not e and sched:
-                schedules[tid] = sched
+                with sched_lock:
+                    schedules[tid] = sched
 
-        with cf.ThreadPoolExecutor(max_workers=max_workers) as ex:
-            list(ex.map(fetch, team_ids))
+        # Soft-timed like phase 1 — `list(ex.map(...))` joined every worker
+        # with no cap, so one slow wave of schedule pages could stall the
+        # whole scores endpoint past Vercel's function limit.
+        phase2_timeout = min(timeout, 25) if timeout else 25
+        ex = cf.ThreadPoolExecutor(max_workers=max_workers)
+        futs = [ex.submit(fetch, tid) for tid in team_ids]
+        cf.wait(futs, timeout=phase2_timeout)
+        ex.shutdown(wait=False, cancel_futures=True)
+        with sched_lock:
+            schedules_snapshot = dict(schedules)
 
         for g in missing:
             for tid in (g.get("home_id"), g.get("away_id")):
-                for s in schedules.get(tid, []):
-                    if s["date"] != today_label or not s.get("played"):
+                for sch in schedules_snapshot.get(tid, []):
+                    if sch["date"] != today_label or not sch.get("played"):
                         continue
-                    if {s.get("home_id"), s.get("away_id")} == ids_of(g):
-                        _attach(g, s["home_score"], s["away_score"])
+                    if {sch.get("home_id"), sch.get("away_id")} == ids_of(g):
+                        _attach(g, sch["home_score"], sch["away_score"], is_final=True)
                         break
+
+    for g in games:
+        g["status"] = classify_game_status(g, now)
 
 
 def ids_of(g):
@@ -1419,7 +1577,10 @@ def compute_team_form(games, team_id, standings_row=None):
 
 
 def parse_player_history(team_id, player_id):
-    soup, err = get_soup(f"/team/player_history.cfm?TeamID={team_id}&PlayerID={player_id}")
+    if _is_opaque_id(player_id):
+        soup, err = get_soup("/team/player_history.cfm?" + player_id)
+    else:
+        soup, err = get_soup(f"/team/player_history.cfm?TeamID={team_id}&PlayerID={player_id}")
     if err:
         return None, err
     return _parse_player_history_soup(soup), None
@@ -1430,3 +1591,498 @@ def parse_player_history_by_token(token):
     if err:
         return None, err
     return _parse_player_history_soup(soup), None
+
+
+def parse_team_playoff_results(team_id):
+    """Playoff games from a team schedule page (historical tokens work).
+
+    Result W/L/T is from this team's perspective (ChillerStats last column).
+    Returns [] when the source has no Playoff Schedule table.
+    """
+    soup, err = get_soup("/team/schedule.cfm?" + _resource_qs("TeamID", team_id))
+    if err:
+        return [], err
+
+    heading = soup.find(lambda t: t.name in ("h2", "h3") and "Playoff" in t.get_text())
+    if not heading:
+        return [], None
+    table = heading.find_next("table")
+    if not table:
+        return [], None
+
+    games = []
+    tbody = table.find("tbody")
+    rows = tbody.find_all("tr") if tbody else []
+    for row in rows:
+        cells = row.find_all("td")
+        if len(cells) < 7:
+            continue
+        score_text = _text(cells[6])
+        result = _text(cells[7]).strip().upper() if len(cells) > 7 else ""
+        if result not in ("W", "L", "T", "OTL"):
+            result = ""
+        m = re.match(r"(\d+)\s*-\s*(\d+)", score_text)
+        games.append({
+            "date": _text(cells[0]),
+            "time": _text(cells[1]),
+            "facility": _text(cells[2]),
+            "home": _text(cells[4]),
+            "away": _text(cells[5]),
+            "home_score": int(m.group(1)) if m else None,
+            "away_score": int(m.group(2)) if m else None,
+            "result": result,
+            "played": bool(result) or bool(m),
+        })
+    return games, None
+
+
+def parse_team_history(team_id, timeout=18):
+    """Previous-session records + championship/1st-place awards for a team.
+
+    Source: current roster player_history.cfm rows whose TEAM matches this
+    club, then that session's team standings.cfm (W/L/OTL) and schedule
+    playoff table. Never invents 0-0-0 placeholders.
+    """
+    from concurrent.futures import ThreadPoolExecutor, wait as _wait
+
+    over, e1 = parse_team_overview(team_id)
+    if e1:
+        return None, e1
+    roster, e2 = parse_team_stats(team_id)
+    if e2:
+        return None, e2
+
+    team_name = (over or {}).get("team_name_core") or (over or {}).get("team_name") or ""
+    want = _norm_team_name(team_name)
+
+    tokens = []
+    seen = set()
+    for sec in (roster or {}).get("sections", []):
+        for p in sec.get("players", []):
+            tok = p.get("token")
+            if tok and tok not in seen:
+                seen.add(tok)
+                tokens.append(tok)
+    for g in (roster or {}).get("goalies", []):
+        tok = g.get("token")
+        if tok and tok not in seen:
+            seen.add(tok)
+            tokens.append(tok)
+
+    histories = []
+
+    def fetch_hist(tok):
+        data, err = parse_player_history_by_token(tok)
+        if not err and data:
+            return data
+        return None
+
+    if tokens:
+        ex = ThreadPoolExecutor(max_workers=8)
+        futs = [ex.submit(fetch_hist, tok) for tok in tokens]
+        done, _pending = _wait(futs, timeout=max(6, timeout * 0.55))
+        for f in done:
+            try:
+                data = f.result()
+            except Exception:
+                continue
+            if data:
+                histories.append(data)
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    seasons = {}
+    for hist in histories:
+        for row in hist.get("history") or []:
+            if _norm_team_name(row.get("team")) != want:
+                continue
+            season = (row.get("season") or "").strip()
+            league = (row.get("league") or "").strip()
+            if not season:
+                continue
+            key = (season, league)
+            prev = seasons.get(key)
+            token = row.get("team_token")
+            sort = row.get("season_sort") or 0
+            if not prev or (token and not prev.get("team_token")):
+                seasons[key] = {
+                    "season": season,
+                    "league": league,
+                    "team_token": token,
+                    "season_sort": sort,
+                }
+            elif sort and sort > prev.get("season_sort", 0):
+                prev["season_sort"] = sort
+
+    current_stand, _ = parse_team_standings(team_id)
+    current_row = None
+    if current_stand:
+        current_row = next((s for s in current_stand if s.get("team_id") == team_id), None)
+        if not current_row:
+            current_row = next(
+                (s for s in current_stand if _norm_team_name(s.get("team")) == want),
+                None,
+            )
+
+    def _same_record(a, b):
+        if not a or not b:
+            return False
+        return (a.get("gp"), a.get("w"), a.get("l"), a.get("otl"), a.get("pts")) == (
+            b.get("gp"), b.get("w"), b.get("l"), b.get("otl"), b.get("pts"),
+        )
+
+    items = [s for s in seasons.values() if s.get("team_token")]
+    records = []
+    awards = []
+
+    def fetch_season(item):
+        rec_out = None
+        award_list = []
+        tok = item["team_token"]
+        stand, _e_s = parse_team_standings(tok)
+        playoffs, _e_p = parse_team_playoff_results(tok)
+        row = None
+        rank = None
+        if stand:
+            for i, s in enumerate(stand, 1):
+                if _norm_team_name(s.get("team")) == want:
+                    row = s
+                    rank = i
+                    break
+        # Skip unpublished / empty sessions (do not emit fake 0-0-0).
+        if not row or not row.get("gp"):
+            return None, []
+        rec = {
+            "season": item["season"],
+            "league": item["league"],
+            "gp": row.get("gp", 0),
+            "w": row.get("w", 0),
+            "l": row.get("l", 0),
+            "otl": row.get("otl", 0),
+            "pts": row.get("pts", 0),
+            "gf": row.get("gf", 0),
+            "ga": row.get("ga", 0),
+            "rank": rank,
+            "teams": len(stand) if stand else None,
+            "record": f"{row.get('w', 0)}-{row.get('l', 0)}-{row.get('otl', 0)}",
+            "is_current": _same_record(row, current_row),
+            "season_sort": item.get("season_sort") or 0,
+        }
+        playoffs = playoffs or []
+        played_po = [g for g in playoffs if g.get("played")]
+        rec["playoff_games"] = len(played_po)
+        rec["playoff_record"] = None
+        if played_po:
+            pw = sum(1 for g in played_po if g.get("result") == "W")
+            pl = sum(1 for g in played_po if g.get("result") == "L")
+            pt = sum(1 for g in played_po if g.get("result") in ("T", "OTL"))
+            rec["playoff_record"] = f"{pw}-{pl}-{pt}" if pt else f"{pw}-{pl}"
+        complete = bool(playoffs) and all(g.get("played") for g in playoffs)
+        last = played_po[-1] if played_po else None
+        champion = bool(complete and last and last.get("result") == "W")
+        first_place = rank == 1
+        rec["champion"] = champion
+        rec["first_place"] = first_place
+        rec_out = rec
+        if champion:
+            last_opp = None
+            score = None
+            if last:
+                hs, aws = last.get("home_score"), last.get("away_score")
+                if _norm_team_name(last.get("home")) == want:
+                    last_opp = last.get("away")
+                    if hs is not None and aws is not None:
+                        score = f"{hs}-{aws}"
+                else:
+                    last_opp = last.get("home")
+                    if hs is not None and aws is not None:
+                        score = f"{aws}-{hs}"
+            award_list.append({
+                "kind": "champion",
+                "title": "Session champion",
+                "season": item["season"],
+                "league": item["league"],
+                "source": "playoff",
+                "detail": (
+                    f"Won final playoff game vs {last_opp}"
+                    if last_opp else "Won the session playoff"
+                ),
+                "score": score,
+            })
+        if first_place:
+            award_list.append({
+                "kind": "first_place",
+                "title": "1st place",
+                "season": item["season"],
+                "league": item["league"],
+                "source": "standings",
+                "detail": f"Finished 1st of {len(stand)} in regular-season standings",
+                "score": None,
+            })
+        return rec_out, award_list
+
+    if items:
+        remain = max(4, timeout * 0.4)
+        ex = ThreadPoolExecutor(max_workers=6)
+        futs = [ex.submit(fetch_season, it) for it in items]
+        done, _pending = _wait(futs, timeout=remain)
+        for f in done:
+            try:
+                rec, award_list = f.result()
+            except Exception:
+                continue
+            if rec:
+                records.append(rec)
+            if award_list:
+                awards.extend(award_list)
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    records.sort(key=lambda r: r.get("season_sort") or 0, reverse=True)
+    seen_aw = set()
+    uniq_awards = []
+    for a in awards:
+        k = (a.get("kind"), a.get("season"), a.get("league"))
+        if k in seen_aw:
+            continue
+        seen_aw.add(k)
+        uniq_awards.append(a)
+    uniq_awards.sort(key=lambda a: a.get("season") or "", reverse=True)
+
+    previous = [r for r in records if not r.get("is_current")]
+    return {
+        "team_name": team_name,
+        "previous": previous,
+        "sessions": records,
+        "awards": uniq_awards,
+        "partial": bool(tokens) and len(histories) < len(tokens),
+    }, None
+
+
+def extract_championship(playoffs, season="", league_name=""):
+    """Champion only from a played CHAMPIONSHIP/FINAL game. Never invent a title."""
+    if not playoffs:
+        return None
+    champ_round = None
+    for rnd in playoffs:
+        name = rnd.get("round") or ""
+        if re.search(r"CHAMPIONSHIP", name, re.I):
+            champ_round = rnd
+            break
+    if champ_round is None:
+        for rnd in playoffs:
+            name = rnd.get("round") or ""
+            if re.search(r"\bFINAL\b", name, re.I) and not re.search(r"SEMI", name, re.I):
+                champ_round = rnd
+    if not champ_round:
+        return None
+    played = [g for g in champ_round.get("games") or [] if g.get("played")
+              and g.get("home_score") is not None and g.get("away_score") is not None]
+    if not played:
+        return None
+    g = played[-1]
+    hs, aws = g["home_score"], g["away_score"]
+    if hs == aws:
+        return None
+    if hs > aws:
+        winner, winner_id, loser = g.get("home"), g.get("home_id"), g.get("away")
+    else:
+        winner, winner_id, loser = g.get("away"), g.get("away_id"), g.get("home")
+    session = (season or "").strip()
+    league = (league_name or "").strip()
+    title_bits = [b for b in (session, league, "Champion") if b]
+    return {
+        "session": session,
+        "league": league,
+        "title": " ".join(title_bits),
+        "winner": winner,
+        "winner_id": winner_id,
+        "opponent": loser,
+        "score": f"{hs}-{aws}",
+        "date": g.get("date") or "",
+        "round": champ_round.get("round") or "Championship",
+    }
+
+
+def awards_for_team(team_id, team_name, championship, roster=None):
+    """Badge if this team won the published championship. No invented trophies."""
+    awards = []
+    if not championship:
+        return awards
+    tid = str(team_id or "")
+    win_id = str(championship.get("winner_id") or "")
+    win_name = _norm_team_name(championship.get("winner") or "")
+    us = _norm_team_name((team_name or "").replace(" Hockey", ""))
+    team_won = bool(tid and win_id and tid == win_id) or (bool(us) and us == win_name)
+    if team_won:
+        awards.append({
+            "kind": "champion",
+            "title": championship.get("title") or "Session champion",
+            "session": championship.get("session") or "",
+            "detail": championship.get("score") or "",
+        })
+    return awards
+
+
+def _index_player(team, p, position):
+    return {
+        "name": p.get("name") or "",
+        "team": team.get("name") or "",
+        "team_id": team.get("id"),
+        "league_id": team.get("league_id"),
+        "league_name": team.get("league_name") or "",
+        "position": p.get("position") or position or "",
+        "jersey": p.get("jersey", "-"),
+        "token": p.get("token"),
+        "player_id": p.get("token") or p.get("player_id"),
+        "gp": p.get("gp", 0),
+        "g": p.get("g", 0),
+        "a": p.get("a", 0),
+        "pts": p.get("pts", 0),
+        "pim": p.get("pim", 0),
+        "w": p.get("w", 0),
+        "l": p.get("l", 0),
+        "otl": p.get("otl", 0),
+        "ga": p.get("ga", 0),
+        "gaa": p.get("gaa", 0),
+    }
+
+
+def index_roster(team, roster, dest):
+    if not roster:
+        return
+    for sec in roster.get("sections") or []:
+        for p in sec.get("players") or []:
+            if not p.get("name"):
+                continue
+            key = f"{p['name'].lower()}|{team['id']}"
+            dest[key] = _index_player(team, p, sec.get("label") or "")
+    for g in roster.get("goalies") or []:
+        if not g.get("name"):
+            continue
+        key = f"{g['name'].lower()}|{team['id']}"
+        dest[key] = _index_player(team, g, "Goalie")
+
+
+def _name_matches_query(name, team, q):
+    n = (name or "").lower()
+    t = (team or "").lower()
+    return q in n or q in t
+
+
+def search_players(query, teams, timeout=32, max_workers=24):
+    """Find players by name without waiting for a full roster fan-out.
+
+    Returns (hits, partial, indexed_all, error).
+    """
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return [], False, {}, None
+    if not teams:
+        return [], False, {}, "No teams to search"
+
+    index = {}
+    errors = []
+    lock = __import__("threading").Lock()
+
+    try:
+        leaders, lerr = parse_all_leaders()
+        if not lerr and leaders:
+            for key in ("points", "goals", "assists"):
+                for row in leaders.get(key) or []:
+                    team = {
+                        "id": row.get("team_id"),
+                        "name": row.get("team") or "",
+                        "league_id": None,
+                        "league_name": "",
+                    }
+                    if not row.get("name") or not team["id"]:
+                        continue
+                    p = {
+                        "name": row["name"],
+                        "token": row.get("player_id") if _is_opaque_id(row.get("player_id")) else None,
+                        "player_id": row.get("player_id"),
+                        "gp": 0,
+                        "g": row.get("goals", 0) if key == "goals" else 0,
+                        "a": row.get("assists", 0) if key == "assists" else 0,
+                        "pts": row.get("points", 0) if key == "points" else 0,
+                        "pim": 0, "jersey": "-", "position": "",
+                    }
+                    k = f"{p['name'].lower()}|{team['id']}"
+                    if k not in index:
+                        entry = _index_player(team, p, "")
+                        entry["player_id"] = row.get("player_id")
+                        if _is_opaque_id(row.get("player_id")):
+                            entry["token"] = row.get("player_id")
+                        index[k] = entry
+                    else:
+                        if key == "points":
+                            index[k]["pts"] = row.get("points", index[k].get("pts", 0))
+                        elif key == "goals":
+                            index[k]["g"] = row.get("goals", index[k].get("g", 0))
+                        elif key == "assists":
+                            index[k]["a"] = row.get("assists", index[k].get("a", 0))
+    except Exception as ex:
+        errors.append(str(ex))
+
+    def fetch(team):
+        try:
+            roster, e = parse_team_stats(team["id"], timeout=6)
+        except Exception as ex:
+            with lock:
+                errors.append(str(ex))
+            return
+        if e:
+            with lock:
+                errors.append(e)
+            return
+        with lock:
+            index_roster(team, roster, index)
+
+    named_ids = {tm["id"] for tm in teams if q in (tm.get("name") or "").lower()}
+    ordered = [tm for tm in teams if tm["id"] in named_ids] + [tm for tm in teams if tm["id"] not in named_ids]
+    specific = len(q.split()) >= 2
+
+    ex = ThreadPoolExecutor(max_workers=max_workers)
+    pending = set(ex.submit(fetch, tm) for tm in ordered)
+    deadline = time.time() + timeout
+    extra_until = None
+    try:
+        while pending and time.time() < deadline:
+            remain = deadline - time.time()
+            if extra_until is not None:
+                remain = min(remain, extra_until - time.time())
+                if remain <= 0:
+                    break
+            done, pending = wait(pending, timeout=max(0.15, remain), return_when=FIRST_COMPLETED)
+            # Workers mutate `index` concurrently — iterate a snapshot under the
+            # lock or CPython raises "dictionary changed size during iteration".
+            with lock:
+                hits_now = [
+                    p for p in list(index.values())
+                    if _name_matches_query(p.get("name"), p.get("team"), q)
+                ]
+            if specific and hits_now:
+                if extra_until is None:
+                    extra_until = time.time() + 2.2
+            elif hits_now:
+                # Some hits already exist: give a short grace window to collect
+                # a few more rosters, then answer — don't scan all ~60 teams.
+                if extra_until is None:
+                    extra_until = time.time() + 0.8
+            if named_ids and hits_now and not specific:
+                extra_until = time.time() + 0.4
+        complete = not pending
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+
+    with lock:
+        hits = [
+            p for p in list(index.values())
+            if _name_matches_query(p.get("name"), p.get("team"), q)
+        ]
+    hits.sort(key=lambda p: p["name"].lower())
+    err = None
+    if not index and errors:
+        err = "; ".join(errors[:3])
+    return hits, (not complete), index, err

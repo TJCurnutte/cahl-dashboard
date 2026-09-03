@@ -32,9 +32,9 @@ ACTIVE_BEFORE_MIN = 30   # treat games starting within 30 min as active
 ACTIVE_AFTER_MIN = 150   # and for ~2.5h after puck drop
 
 
-def get(path):
+def get(path, timeout=90):
     req = urllib.request.Request(BASE + path, headers={"User-Agent": "cahl-cron/1.0"})
-    with urllib.request.urlopen(req, timeout=90) as r:
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
 
@@ -87,10 +87,20 @@ def main():
     warm = ["/api/today", "/api/leaders"]
     if active:
         warm.append("/api/today/scores")  # keep the live-scores path warm too
+    if baseline_due:
+        # Rebuild the all-players index hourly so name search answers instantly
+        # instead of re-scraping every roster on Vercel's next cold start.
+        # full=1 extends the server's fan-out window past the UI's 18s soft cap.
+        warm.append("/api/players?full=1")
+        # Team index fans out to every roster too — cold /api/teams was 25s+
+        # on Vercel (jury R2 interaction lens), so warm it on every baseline.
+        warm.append("/api/teams")
     for path in warm:
         t0 = datetime.now()
         try:
-            get(path)
+            # /api/players and /api/teams fan out to every roster and can run
+            # minutes cold; give both headroom so the baseline warm completes.
+            get(path, timeout=420 if path.split("?")[0] in ("/api/players", "/api/teams") else 90)
             print(f"warmed {path} in {(datetime.now() - t0).total_seconds():.1f}s")
         except Exception as e:  # keep going; next run will retry
             print(f"warm {path} failed: {e}")

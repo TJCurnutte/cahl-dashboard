@@ -4,12 +4,10 @@ window.addEventListener('pageshow', e => {
   if (e.persisted) location.reload();
 });
 
-// Version guard: if the cached HTML and JS disagree, reload once to resync.
-const JS_VERSION = 37;
-if (window.APP_VERSION && window.APP_VERSION !== JS_VERSION && !sessionStorage.getItem('vresync')) {
-  sessionStorage.setItem('vresync', '1');
-  location.reload();
-}
+// Frontend version — shown in the badge. The old window.APP_VERSION
+// dual-check is gone (index.html's stale copy caused a reload on every
+// boot); /api/version self-heal below is the only reload path now.
+const JS_VERSION = 54;
 
 // Self-heal: if the server is running a NEWER frontend than this cached JS, reload fresh.
 fetch('/api/version').then(r => r.json()).then(v => {
@@ -20,8 +18,6 @@ fetch('/api/version').then(r => r.json()).then(v => {
 }).catch(() => {});
 
 const $main = document.getElementById('main');
-const $ver = document.getElementById('verBadge');
-if ($ver) $ver.textContent = 'v' + JS_VERSION;
     const $refresh = document.getElementById('refreshBtn');
     const $auto = document.getElementById('autoToggle');
     const navLinks = document.querySelectorAll('.nav-link');
@@ -39,6 +35,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       teamsLeague: '',
       allTeams: [],
       allTeamsLoading: false,
+      teamsError: false,
       allPlayers: [],
       allPlayersLoading: false,
       playersError: false,
@@ -202,7 +199,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     }
 
     function changeLeagueHtml() {
-      return `<div class="picker-current">League: <b>${currentLeagueName()}</b> <span class="link" data-change-league>Change</span></div>`;
+      return `<div class="picker-current">League: <b>${esc(currentLeagueName())}</b> <span class="link" data-change-league>Change</span></div>`;
     }
 
     // ---- Players-tab division filter (independent of main league selection) ----
@@ -247,53 +244,108 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       </div>`;
     }
 
-    async function loadAllTeams() {
-      if (state.allTeams.length || state.allTeamsLoading) return;
+    async function loadAllTeams(force=false) {
+      if (state.allTeamsLoading) return;
+      if (state.allTeams.length && !force) return;
       state.allTeamsLoading = true;
+      state.teamsError = false;
+      const live = $('#teamSearch');
+      if (live && live.value.trim()) renderTypeahead(live);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 25000);
       try {
-        const res = await fetch('/api/teams');
+        const res = await fetch('/api/teams', { signal: ctrl.signal, cache: 'no-store' });
         const data = await res.json();
-        if (Array.isArray(data)) state.allTeams = data;
-      } catch (e) { /* typeahead keeps showing loading */ }
-      state.allTeamsLoading = false;
-      // refresh any visible dropdown now that data arrived
+        const list = Array.isArray(data) ? data : (data && data.teams);
+        if (Array.isArray(list) && list.length) {
+          state.allTeams = list;
+          state.teamsError = false;
+        } else {
+          state.allTeams = Array.isArray(list) ? list : [];
+          state.teamsError = (data && data.error) ? data.error : 'No teams returned';
+        }
+      } catch (e) {
+        state.teamsError = (e && e.name === 'AbortError') ? 'Teams request timed out' : 'Couldn\u2019t load teams';
+      } finally {
+        clearTimeout(timer);
+        state.allTeamsLoading = false;
+      }
       const input = $('#teamSearch');
-      if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (input && input.value.trim()) renderTypeahead(input);
     }
 
     async function loadAllPlayers(force=false) {
       if (state.allPlayersLoading) return;
-      if (state.allPlayers.length && !force) return;
+      if (state.allPlayers.length && !force && !state.playersPartial) return;
       state.allPlayersLoading = true;
       state.playersError = false;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 22000);
       try {
-        const res = await fetch('/api/players');
+        const res = await fetch('/api/players', { signal: ctrl.signal, cache: 'no-store' });
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data && data.players);
         if (Array.isArray(list) && list.length) {
           state.allPlayers = list;
+          state.playersError = false;
           if (!Array.isArray(data) && data.partial) {
             state.playersPartial = { fetched: data.fetched, total: data.total };
-            // Scraped pages are warm now — a retry finishes the rest quickly (bounded)
             state.playersRetries = (state.playersRetries || 0) + 1;
-            if (state.playersRetries <= 5) {
-              setTimeout(() => loadAllPlayers(true), 15000);
+            if (state.playersRetries <= 4) {
+              setTimeout(() => loadAllPlayers(true), 8000);
             }
           } else {
             state.playersPartial = null;
             state.playersRetries = 0;
           }
         } else {
-          state.playersError = true;
+          state.playersError = (data && data.error) ? data.error : 'No players returned';
         }
       } catch (e) {
-        state.playersError = true;
+        state.playersError = (e && e.name === 'AbortError') ? 'Player index timed out' : 'Couldn\u2019t load players';
+      } finally {
+        clearTimeout(timer);
+        state.allPlayersLoading = false;
       }
-      state.allPlayersLoading = false;
-      // Re-render whatever is visible so error/loaded states refresh
+      const el = document.getElementById('fullLeaderboard');
+      if (el) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = leaderboardHtml();
+        if (wrap.firstElementChild) el.replaceWith(wrap.firstElementChild);
+      }
       const input = $('#playerSearch');
-      if (input && input.value.trim()) input.dispatchEvent(new Event('input', { bubbles: true }));
-      if (state.tab === 'players') renderPlayers();
+      if (input && input.value.trim()) renderPlayerTypeahead(input);
+    }
+
+    let lookupTimer = null;
+    let lookupCtrl = null;
+    async function lookupPlayers(q) {
+      const query = (q || '').trim();
+      if (query.length < 2) return { players: [], error: null, partial: false };
+      if (lookupCtrl) lookupCtrl.abort();
+      lookupCtrl = new AbortController();
+      const timer = setTimeout(() => lookupCtrl.abort(), 40000);
+      try {
+        const res = await fetch('/api/players/lookup?q=' + encodeURIComponent(query), {
+          signal: lookupCtrl.signal,
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        const list = (data && data.players) || [];
+        return {
+          players: Array.isArray(list) ? list : [],
+          error: data && data.error ? data.error : null,
+          partial: !!(data && data.partial),
+        };
+      } catch (e) {
+        return {
+          players: [],
+          error: (e && e.name === 'AbortError') ? 'Lookup timed out' : 'Couldn\u2019t search players',
+          partial: false,
+        };
+      } finally {
+        clearTimeout(timer);
+      }
     }
 
     async function pickSearchedTeam(teamId, leagueId) {
@@ -316,6 +368,25 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
     // ---- Team search typeahead (fully delegated — re-renders can't leak listeners) ----
     let taIndex = -1;
+    let taDebounceTimer = null;
+    let taLastQuery = '';
+
+    // On a new keystroke (before the debounced render): stale failure text from
+    // the previous query — 'timed out', 'No teams loaded', 'No teams match' —
+    // must never bleed into the new query's dropdown.
+    function taClearStale(input) {
+      const box = $('#teamSuggest');
+      if (!box) return;
+      const q = input.value.trim().toLowerCase();
+      if (!q) { taLastQuery = ''; box.innerHTML = ''; taClose(input, box); return; }
+      if (q === taLastQuery) return;
+      const stale = box.querySelector('.typeahead-item[data-tretry], .typeahead-item.muted');
+      if (stale) {
+        box.innerHTML = state.allTeamsLoading
+          ? '<div class="typeahead-item muted">Loading teams\u2026</div>'
+          : '<div class="typeahead-item muted">Searching\u2026</div>';
+      }
+    }
 
     function taItems() {
       const box = $('#teamSuggest');
@@ -333,14 +404,24 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       taIndex = -1;
     }
 
-    function renderTypeahead(input) {
+    function renderTypeahead(input, immediate=false) {
       const box = $('#teamSuggest');
       if (!box) return;
       const q = input.value.trim().toLowerCase();
-      if (!q) { box.innerHTML = ''; taClose(input, box); return; }
+      taLastQuery = q;
+      if (!q) { clearTimeout(taDebounceTimer); box.innerHTML = ''; taClose(input, box); return; }
+      if (!immediate) {
+        clearTimeout(taDebounceTimer);
+        taDebounceTimer = setTimeout(() => renderTypeahead(input, true), 180);
+        return;
+      }
       const matches = state.allTeams.filter(t => t.name.toLowerCase().includes(q)).slice(0, 8);
-      if (!state.allTeams.length) {
+      if (state.allTeamsLoading && !state.allTeams.length) {
         box.innerHTML = '<div class="typeahead-item muted">Loading teams\u2026</div>';
+      } else if (state.teamsError && !state.allTeams.length) {
+        box.innerHTML = '<div class="typeahead-item" data-tretry><span class="ta-name">' + esc(state.teamsError) + ' \u2014 tap to retry</span></div>';
+      } else if (!state.allTeams.length) {
+        box.innerHTML = '<div class="typeahead-item" data-tretry><span class="ta-name">No teams loaded \u2014 tap to retry</span></div>';
       } else if (!matches.length) {
         box.innerHTML = '<div class="typeahead-item muted">No teams match</div>';
       } else {
@@ -360,12 +441,12 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       return `<div class="team-search">
         <input id="playerSearch" type="text" role="combobox" aria-autocomplete="list" aria-controls="playerSuggest" aria-expanded="false" aria-label="Search for a player" placeholder="Type a player name…" autocomplete="off" autocapitalize="off" spellcheck="false" />
         <div id="playerSuggest" class="typeahead" role="listbox"></div>
-      </div>`;
+      </div><div class="picker-hint">Search any player across all CAHL teams — tap a name for their all-time stats</div>`;
     }
 
     function paItems() {
       const box = $('#playerSuggest');
-      return box ? [...box.querySelectorAll('.typeahead-item[data-ptoken]')] : [];
+      return box ? [...box.querySelectorAll('.typeahead-item[data-pname]')] : [];
     }
 
     function paHighlight(items) {
@@ -379,28 +460,50 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       paIndex = -1;
     }
 
+    function playerRowHtml(p) {
+      const tok = p.token || '';
+      const pid = p.player_id || '';
+      return `<div class="typeahead-item" role="option" data-ptoken="${esc(tok)}" data-pid="${esc(pid)}" data-tid="${esc(p.team_id || '')}" data-tname="${esc(p.team)}" data-pname="${esc(p.name)}"><span class="ta-name">${esc(p.name)}</span><span class="ta-league">${esc(p.team)} \u00b7 ${esc(p.position || '')}</span></div>`;
+    }
+
     function renderPlayerTypeahead(input) {
       const box = $('#playerSuggest');
       if (!box) return;
-      const q = input.value.trim().toLowerCase();
+      const q = input.value.trim();
       if (!q) { box.innerHTML = ''; paClose(input, box); return; }
-      const matches = state.allPlayers.filter(p =>
-        p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q)
+      const ql = q.toLowerCase();
+      const local = state.allPlayers.filter(p =>
+        (p.name || '').toLowerCase().includes(ql) || (p.team || '').toLowerCase().includes(ql)
       ).slice(0, 10);
-      if (state.playersError && !state.allPlayers.length) {
-        box.innerHTML = '<div class="typeahead-item" data-pretry><span class="ta-name">Couldn\u2019t load players \u2014 tap to retry</span></div>';
-      } else if (!state.allPlayers.length) {
-        box.innerHTML = '<div class="typeahead-item muted">Loading players\u2026</div>';
-      } else if (!matches.length) {
-        box.innerHTML = '<div class="typeahead-item muted">No players match</div>';
+      if (local.length) {
+        box.innerHTML = local.map(playerRowHtml).join('');
+      } else if (q.length < 2) {
+        box.innerHTML = '<div class="typeahead-item muted">Keep typing a name\u2026</div>';
       } else {
-        box.innerHTML = matches.map(p =>
-          `<div class="typeahead-item" role="option" data-ptoken="${p.token || ''}" data-tid="${p.team_id}" data-tname="${esc(p.team)}" data-pname="${esc(p.name)}"><span class="ta-name">${esc(p.name)}</span><span class="ta-league">${esc(p.team)} · ${esc(p.position || '')}</span></div>`
-        ).join('');
+        box.innerHTML = '<div class="typeahead-item muted">Searching\u2026</div>';
       }
       paIndex = -1;
       box.classList.add('open');
       input.setAttribute('aria-expanded', 'true');
+      if (q.length < 2) return;
+      clearTimeout(lookupTimer);
+      lookupTimer = setTimeout(async () => {
+        if (!$('#playerSearch') || $('#playerSearch').value.trim() !== q) return;
+        const result = await lookupPlayers(q);
+        if (!$('#playerSearch') || $('#playerSearch').value.trim() !== q) return;
+        const boxNow = $('#playerSuggest');
+        if (!boxNow) return;
+        if (result.error && !result.players.length) {
+          boxNow.innerHTML = '<div class="typeahead-item" data-plookupretry><span class="ta-name">' + esc(result.error) + ' \u2014 tap to retry</span></div>';
+        } else if (!result.players.length) {
+          const extra = result.partial ? ' Index still filling \u2014 tap to retry.' : '';
+          boxNow.innerHTML = '<div class="typeahead-item" data-plookupretry><span class="ta-name">No players match.' + extra + '</span></div>';
+        } else {
+          boxNow.innerHTML = result.players.slice(0, 10).map(playerRowHtml).join('');
+        }
+        paIndex = -1;
+        boxNow.classList.add('open');
+      }, 220);
     }
 
     function pickSearchedPlayer(token) {
@@ -485,7 +588,20 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     function leaderboardHtml() {
       const { level, sortKey, sortDir, showAll } = state.board;
       const LEVELS = [['all', 'All Levels'], ['b', 'B League'], ['c', 'C League'], ['d', 'D League'], ['other', 'Other']];
-      let html = '<div class="card"><h2>Full Leaderboard</h2><div class="picker-days">';
+      let html = '<div class="card" id="fullLeaderboard"><h2>Full Leaderboard</h2>';
+      // Signature strip: tonight's pacemakers — top 3 by PTS across the loaded index.
+      if (state.allPlayers.length) {
+        const pace = state.allPlayers.slice().sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0)).slice(0, 3);
+        html += '<div class="pacemakers"><div class="pacemakers-label">LEAGUE LEADERS</div><div class="pacemakers-row">'
+          + pace.map((p, i) => `
+            <div class="pacemaker" onclick="selectPlayerToken('${p.token || ''}')">
+              <span class="pace-name">${esc(p.name)}</span>
+              <span class="pace-stat">${p.pts ?? 0}<small>PTS</small></span>
+              <span class="pace-team">${esc(p.team)}</span>
+            </div>`).join('')
+          + '</div></div>';
+      }
+      html += '<div class="picker-days">';
       LEVELS.forEach(([k, label]) => {
         html += `<span class="pill ${level === k ? 'active' : ''}" data-level="${k}" tabindex="0" role="button">${label}</span>`;
       });
@@ -493,9 +609,11 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
       if (!state.allPlayers.length) {
         if (state.playersError) {
-          html += '<div class="empty">Couldn\u2019t load the player index (it\u2019s a big scrape \u2014 first load can take a minute). <button class="ghost small" data-pretry style="margin-top:8px">Retry</button></div></div>';
+          html += '<div class="empty">' + esc(typeof state.playersError === 'string' ? state.playersError : 'Couldn\u2019t load the player index') + ' <button class="ghost small" data-pretry style="margin-top:8px">Retry</button></div></div>';
+        } else if (state.allPlayersLoading) {
+          html += '<div class="empty">Loading the full leaderboard\u2026 <span class="picker-hint" style="display:block;margin-top:4px">PTS/G leaders below are ready now. Search a name up top \u2014 lookup does not wait for this list.</span></div></div>';
         } else {
-          html += '<div class="empty">Loading every player in the CAHL\u2026 <span class="picker-hint" style="display:block;margin-top:4px">first load can take a minute</span></div></div>';
+          html += '<div class="empty">Full leaderboard isn\u2019t loaded yet. <button class="ghost small" data-pretry style="margin-top:8px">Load leaderboard</button></div></div>';
         }
         return html;
       }
@@ -509,17 +627,37 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         html += `<th${c.num ? ' class="num"' : ''} data-sort="${c.key}" tabindex="0" role="button" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
       });
       html += '</tr></thead><tbody>';
-      html += shown.map((p, i) => `
+      // Signature viz: P/GP rendered as a Savant-style percentile bar.
+      // Scale anchor: 2.0 P/GP is an elite beer-league pace (full width).
+      const shownPpg = shown.map(p => p.gp ? p.pts / p.gp : 0);
+      const ppgMax = Math.max(2.0, ...shownPpg);
+      // Median tick: thin marker on every bar at the shown cohort's median P/GP.
+      const sortedPpg = shownPpg.slice().sort((a, b) => a - b);
+      const ppgMedian = sortedPpg.length ? sortedPpg[Math.floor(sortedPpg.length / 2)] : 0;
+      const ppgMedianPct = Math.max(0, Math.min(100, ppgMedian / ppgMax * 100));
+      // Position chips: D/F/G color-coded mono badges (defense=union, forward=text, goalie=accent).
+      const POS_KEY = { d: 'pos-d', f: 'pos-f', g: 'pos-g' };
+      const posChip = p => {
+        const raw = (p.position || '').trim();
+        if (!raw || raw === '-') return '-';
+        const k = POS_KEY[raw.charAt(0).toUpperCase()];
+        return k ? `<span class="pos-chip ${k}">${esc(raw.slice(0, 2).toUpperCase())}</span>` : esc(raw);
+      };
+      html += shown.map((p, i) => {
+        const ppg = p.gp ? p.pts / p.gp : 0;
+        const pct = Math.max(4, Math.min(100, ppg / ppgMax * 100));
+        return `
         <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
           <td class="num">${i + 1}</td>
           <td><span class="link">${esc(p.name)}</span></td>
           <td>${esc(p.team)}</td>
-          <td>${esc(p.position || '-')}</td>
+          <td>${posChip(p)}</td>
           <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td>
           <td class="num">${p.pts}</td>
-          <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td>
+          <td class="num"><div class="ppg-bar"><div class="ppg-fill" style="width:${pct.toFixed(1)}%"></div><span class="ppg-median" style="left:${ppgMedianPct.toFixed(1)}%"></span><span class="ppg-val">${p.gp ? ppg.toFixed(2) : '-'}</span></div></td>
           <td class="num">${p.pim}</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
       html += '</tbody></table>';
       if (!showAll && rows.length > shown.length) {
         html += `<button class="ghost small" data-showall style="margin-top:10px">Show all ${rows.length} players</button>`;
@@ -544,7 +682,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         if (!state.allTeams.length) {
           box.innerHTML = '<div class="typeahead-item muted">Loading teams\u2026</div>';
         } else if (!matches.length) {
-          box.innerHTML = '<div class="typeahead-item muted">No teams match\\u2026</div>';
+          box.innerHTML = '<div class="typeahead-item muted">No teams match\u2026</div>';
         } else {
           box.innerHTML = matches.map(t =>
             `<div class="typeahead-item" data-tid="${t.id}" data-lid="${t.league_id}"><span class="ta-name">${esc(t.name)}</span><span class="ta-league">${esc(t.league_name)}</span></div>`
@@ -684,10 +822,13 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     }, { passive: true });
 
     async function api(path, refresh=false) {
-      const cacheKey = (refresh ? '!' : '') + path;
+      const cacheKey = path.split('?')[0];
       if (!refresh && state.cache[cacheKey]) return state.cache[cacheKey];
       try {
-        const res = await fetch(path);
+        const bust = (refresh || path.indexOf('/api/today') === 0)
+          ? (path.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()
+          : '';
+        const res = await fetch(path + bust, { cache: 'no-store' });
         const data = await res.json();
         if (res.ok) state.cache[cacheKey] = data;
         return data;
@@ -700,73 +841,134 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       $refresh.disabled = true;
       $refresh.textContent = '';
       $refresh.appendChild(Object.assign(document.createElement('span'), { className: 'spinner' }));
-      // Light scope: clears page caches so scores/sheets refetch, keeps big aggregates warm
-      await fetch('/api/refresh?scope=scores', { method: 'POST' });
-      state.cache = {};
-      state._sessions = null;
-      state.allTeams = [];
-      state.allPlayers = [];
-      await loadActiveTab(true);
-      $refresh.innerHTML = 'Refresh';
-      $refresh.disabled = false;
+      try {
+        // Light scope: clears page caches so scores/sheets refetch, keeps big aggregates warm
+        await fetch('/api/refresh?scope=scores', { method: 'POST' });
+        state.cache = {};
+        state._sessions = null;
+        state.allTeams = [];
+        state.allPlayers = [];
+        await loadActiveTab(true);
+      } finally {
+        // Restore the button even when the refresh/render throws, so a failed
+        // refresh can never leave it permanently disabled with a spinner.
+        $refresh.innerHTML = 'Refresh';
+        $refresh.disabled = false;
+      }
       const t = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
       showToast(`Updated ${t}`);
     }
 
     // ---- Live game polling ----
-    // Game state: 'upcoming' | 'live' | 'final'. A game with a posted score that is
-    // well past its expected end (~2h15m; games run ~75-90min) is final, not live.
+    // Prefer server status (ET). Fallback uses a tight beer-league window so
+    // finished games never linger as LIVE (~85 min with a score, 100 min hard).
     function gameLiveState(g) {
+      if (g.status === 'live' || g.status === 'final' || g.status === 'upcoming') return g.status;
       const m = (g.time || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-      if (!m) return 'upcoming';
+      if (!m) return g.played ? 'final' : 'upcoming';
       let hh = parseInt(m[1], 10) % 12;
       if (m[3].toUpperCase() === 'PM') hh += 12;
       const start = new Date();
       start.setHours(hh, parseInt(m[2], 10), 0, 0);
       const now = new Date();
-      const scored = g.played && (g.home_score || g.away_score);
-      if (now < new Date(start.getTime() - 15 * 60000)) return 'upcoming';
-      if (now >= new Date(start.getTime() + 180 * 60000)) return 'final'; // hard window end
-      if (scored && now >= new Date(start.getTime() + 135 * 60000)) return 'final';
+      const scored = g.played && g.home_score != null;
+      const mins = (now - start) / 60000;
+      if (mins < -10) return 'upcoming';
+      if (mins >= 100) return 'final';
+      if (scored && mins >= 85) return 'final';
       return 'live';
     }
 
-    // Polling trigger: any game currently live
     function isLiveGame(g) { return gameLiveState(g) === 'live'; }
+    function hasPostedScore(g) {
+      return !!(g.played && g.home_score != null && g.away_score != null);
+    }
+    // ChillerStats lists some practice/scrimmage ice slots with literal names
+    // like "Team Blue vs Team Red". Real rosters don't exist behind those, so
+    // render them as muted non-links so they don't look like a data bug.
+    function isScrimmageTeam(n) {
+      return /^team\s+(blue|red|white|black|grey|gray|gold|green|navy|silver|teal|orange|yellow|purple|home|away)$/i.test((n || '').trim());
+    }
+    function isScrimmageGame(g) {
+      return isScrimmageTeam(g.home) && isScrimmageTeam(g.away);
+    }
 
     let livePollTimer = null;
+    let livePollInFlight = false;
+    async function tickLiveScores() {
+      if (livePollInFlight || document.hidden) return;
+      livePollInFlight = true;
+      try {
+        delete state.cache['/api/today/scores'];
+        await loadTodayScores(true);
+      } catch (e) { /* next tick retries */ }
+      livePollInFlight = false;
+    }
     function syncLivePolling(games) {
       const anyLive = (games || []).some(isLiveGame);
       document.body.classList.toggle('has-live', anyLive);
+      const pillLabel = document.getElementById('livePillLabel');
+      if (pillLabel) pillLabel.textContent = anyLive ? 'LIVE' : 'NO GAMES LIVE';
       if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
       if (!anyLive) return;
-      // While any game is in its live window, refresh scores every 30s automatically
-      livePollTimer = setInterval(async () => {
-        try {
-          await fetch('/api/refresh?scope=scores', { method: 'POST' });
-          state.cache = {};
-          await loadTodayScores(true); // light: only the game-night dashboards
-        } catch (e) { /* next tick retries */ }
-      }, 30000);
+      // Do not POST /api/refresh here — that wipes the instance cache and is
+      // unreliable across Vercel isolates. Scores path fetches dashboards fresh.
+      livePollTimer = setInterval(tickLiveScores, 20000);
     }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && (state.todayGames || []).some(isLiveGame)) tickLiveScores();
+    });
+
+    const TAB_HASH = { team: 'team', league: 'league', players: 'players', analytics: 'analytics' };
+
+    // Back/forward support: browser history changes the hash without any
+    // click, so listen for hashchange and re-render the matching tab. The
+    // h === TAB_HASH[state.tab] check is the re-entrancy guard — it ignores
+    // no-op transitions (e.g. a hash edit that only changes case, #Team) and
+    // hash restores that already match the active tab, preventing re-render
+    // loops. setTab itself uses replaceState, which never fires hashchange.
+    window.addEventListener('hashchange', () => {
+      const h = (location.hash || '').slice(1).trim().toLowerCase();
+      if (h === TAB_HASH[state.tab]) return;
+      if (!h) { if (state.tab !== 'today') setTab('today'); return; }
+      if (TABS.includes(h)) setTab(h);
+    });
 
     function setTab(tab) {
       state.tab = tab;
       navLinks.forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
-      if (tab !== 'today' && livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+      // Deep-link support: mirror the tab in the URL without adding history
+      // entries or re-triggering hashchange (replaceState, not location.hash=).
+      const h = TAB_HASH[tab];
+      const want = h ? '#' + h : '';
+      if ((location.hash || '') !== want) {
+        try { history.replaceState(null, '', want || location.pathname + location.search); } catch (e) {}
+      }
       loadActiveTab();
       $main.focus({ preventScroll: true }); // move keyboard focus into content on tab switch
     }
 
+    let _renderToken = 0;
     async function loadActiveTab(refresh=false) {
+      // Render-token guard: each call invalidates any in-flight call. After
+      // every await, a stale call detects a newer token and bails before it
+      // can paint its (older) response over the newer tab's content.
+      const token = ++_renderToken;
+      const stale = () => token !== _renderToken;
       $main.innerHTML = skeletonHtml(4);
       try {
         if (state.tab === 'today') await renderToday(refresh);
+        if (stale()) return;
         if (state.tab === 'league') await renderLeague(refresh);
+        if (stale()) return;
         if (state.tab === 'team') await renderTeam(refresh);
+        if (stale()) return;
         if (state.tab === 'players') await renderPlayers(refresh);
+        if (stale()) return;
         if (state.tab === 'analytics') await renderAnalytics(refresh);
+        if (stale()) return;
       } catch (e) {
+        if (stale()) return; // a newer tab owns the canvas — don't paint errors over it
         $main.innerHTML = `<div class="error">Error loading tab: ${e.message}</div>`;
       }
     }
@@ -814,89 +1016,121 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       `;
     }
 
-    // Hockey scoreboard: one compact card per active game (team — score/LIVE — team).
-    // Only renders while games are actually in their live window.
+    // Hockey scoreboard: stacked (mobile glance) + row (desktop columns).
     function scoreboardHtml(games) {
       const active = (games || []).filter(isLiveGame);
       if (!active.length) return '';
       let html = '<div class="card scoreboard"><h2><span class="live-dot-inline" aria-hidden="true"></span>Live Now</h2>';
-      html += active.map(g => {
-        const scored = g.played && (g.home_score || g.away_score);
-        const center = scored
-          ? `<span class="sb-score">${g.home_score}\u2013${g.away_score}</span>`
-          : '<span class="sb-live">LIVE</span>';
-        return `<div class="sb-row">
-          <div class="sb-team link" onclick="selectTeam('${g.home_id || ''}')">${esc(g.home)}</div>
-          <div class="sb-center">${center}<span class="sb-meta">${fmtTime(g.time)} \u00b7 ${esc((g.facility || '').replace(/^Chiller\s+/i, ''))}</span></div>
-          <div class="sb-team sb-away link" onclick="selectTeam('${g.away_id || ''}')">${esc(g.away)}</div>
-        </div>`;
-      }).join('');
-      html += '<div class="picker-hint">Auto-updating every 30s</div></div>';
+      html += '<div class="sb-list">' + active.map(g => {
+        const scored = hasPostedScore(g);
+        const hs = scored ? g.home_score : '';
+        const as_ = scored ? g.away_score : '';
+        const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
+        // Scrimmage slots have no real rosters behind them — muted, non-clickable
+        if (isScrimmageGame(g)) {
+          return `<article class="sb-card" data-status="live" data-scrim="1">
+            <div class="sb-status"><span class="sb-live">LIVE</span><span class="sb-meta">${fmtTime(g.time)}${rink ? ' · ' + esc(rink) : ''}</span></div>
+            <div class="sb-side"><span class="sb-name">${esc(g.home)}</span><span class="sb-num">${hs === '' ? '–' : hs}</span></div>
+            <div class="sb-side"><span class="sb-name">${esc(g.away)}</span><span class="sb-num">${as_ === '' ? '–' : as_}</span></div>
+          </article>`;
+        }
+        return `<article class="sb-card" data-status="live">
+          <div class="sb-status"><span class="sb-live">LIVE</span><span class="sb-meta">${fmtTime(g.time)}${rink ? ' · ' + esc(rink) : ''}</span></div>
+          <div class="sb-side link" onclick="selectTeam('${g.home_id || ''}')"><span class="sb-name">${esc(g.home)}</span><span class="sb-num">${hs === '' ? '–' : hs}</span></div>
+          <div class="sb-side link" onclick="selectTeam('${g.away_id || ''}')"><span class="sb-name">${esc(g.away)}</span><span class="sb-num">${as_ === '' ? '–' : as_}</span></div>
+        </article>`;
+      }).join('') + '</div>';
+      html += '<div class="picker-hint">Scores refresh about every 20s while a game is live</div></div>';
       return html;
     }
 
     function todayRowHtml(g) {
-      const rink = (g.facility || '').replace(/^Chiller\s+/i, '');
-      // A 0-0 line is the site's default for unplayed games, so it doesn't count as a score
-      const hasScore = g.played && (g.home_score || g.away_score);
+      let rink = (g.facility || '').replace(/^(?:OhioHealth\s+|NTPRD\s+)?Chiller\s+/i, '');
+      rink = rink.replace(/^OhioHealth\s+Ice\s+Haus$/i, 'Ice Haus').replace(/^NTPRD\s+Chiller$/i, 'NTPRD');
+      const hasScore = hasPostedScore(g);
       const st = gameLiveState(g);
-
-      let scoreHtml;
+      const stLabel = st === 'live' ? 'LIVE' : st === 'final' ? 'FINAL' : 'UPCOMING';
+      const scrim = isScrimmageGame(g);
+      // FIX PASS R1-B (3): tint the winning team name (var(--win)); ties keep default
+      const homeWins = hasScore && Number(g.home_score) > Number(g.away_score);
+      const awayWins = hasScore && Number(g.away_score) > Number(g.home_score);
+      // FIX PASS R1-B (2): status chip only on live/final rows — upcoming keeps
+      // the bare vs marker so team names keep their width
+      const chip = (st === 'live' || st === 'final')
+        ? `<span class="status-chip status-${st}">${stLabel}</span>`
+        : '';
+      let scoreInner;
       if (hasScore) {
-        scoreHtml = `<span class="t-score">${g.home_score}\u2013${g.away_score}</span>`
-          + (st === 'final' ? '<span class="final-chip">FINAL</span>' : '');
+        scoreInner = `<span class="t-score">${g.home_score}\u2013${g.away_score}</span>`;
+      } else if (st === 'live') {
+        scoreInner = '<span class="t-score live-badge">LIVE</span>';
       } else {
-        scoreHtml = st === 'live' ? '<span class="t-score live-badge">LIVE</span>' : '';
+        // Em-dash placeholder, never a word: an upcoming game has no score yet.
+        scoreInner = '<span class="t-score t-score-empty" aria-label="Not started">\u2013</span>';
       }
-
-      return `<div class="today-row">
+      const homeCell = scrim
+        ? `<span class="t-home scrim${homeWins ? ' t-win' : ''}">${esc(g.home)}</span>`
+        : `<span class="t-home link${homeWins ? ' t-win' : ''}" onclick="selectTeam('${g.home_id || ''}')">${esc(g.home)}</span>`;
+      const awayCell = scrim
+        ? `<span class="t-away scrim${awayWins ? ' t-win' : ''}">${esc(g.away)}</span>`
+        : `<span class="t-away link${awayWins ? ' t-win' : ''}" onclick="selectTeam('${g.away_id || ''}')">${esc(g.away)}</span>`;
+      return `<div class="today-row" data-status="${st}"${scrim ? ' data-scrim="1"' : ''}>
         <span class="t-time">${fmtTime(g.time)}</span>
-        <span class="t-match"><span class="link" onclick="selectTeam('${g.home_id || ''}')">${esc(g.home)}</span><span class="t-vs">vs</span><span class="link" onclick="selectTeam('${g.away_id || ''}')">${esc(g.away)}</span></span>
-        ${scoreHtml}
+        ${homeCell}
+        <span class="t-board">${scoreInner}${chip}</span>
+        ${awayCell}
         <span class="t-rink">${esc(rink)}</span>
       </div>`;
     }
 
     function todayPageHtml(data) {
-      let html = '';
+      let html = '<p class="board-howto">Every game on tonight\u2019s Chiller slate \u2014 live scores land the moment scoring starts.</p>';
       if (state.myTeam) {
         html += '<div class="card hero-card" id="myTeamHero"><div class="empty">Loading your team\u2026</div></div>';
       } else {
-        html += '<div class="card hero-card hero-cta"><div class="hero-cta-text">Set your team to see next game, last result, and record here</div>'
+        html += '<div class="card hero-card hero-cta"><div class="hero-cta-text">Set your team to pin next game, last result, and record here</div>'
           + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
       }
 
-      // Hockey scoreboard of live games; finals + upcoming stay visible in a compact strip
       const liveNow = state.todayGames.filter(isLiveGame);
-      const rest = state.todayGames.filter(g => !isLiveGame(g));
-      if (liveNow.length) {
-        html += scoreboardHtml(liveNow);
-        if (rest.length) {
-          html += '<div class="card today-card"><h2>Rest of Tonight</h2>'
-            + '<div class="today-list">' + rest.map(todayRowHtml).join('') + '</div></div>';
-        }
+      const finals = state.todayGames.filter(g => gameLiveState(g) === 'final');
+      const upcoming = state.todayGames.filter(g => gameLiveState(g) === 'upcoming');
+      if (liveNow.length) html += scoreboardHtml(liveNow);
+      if (!state.todayGames.length) {
+        html += '<div class="card today-card"><h2>Today\'s Games</h2><div class="empty">No games posted yet.</div></div>';
       } else {
-        html += '<div class="card today-card"><h2>Today\'s Games</h2>';
-        if (!state.todayGames.length) {
-          html += '<div class="empty">No games posted yet.</div>';
-        } else {
-          html += '<div class="today-list">' + state.todayGames.map(todayRowHtml).join('') + '</div>';
+        if (finals.length) {
+          html += '<div class="card today-card"><h2>Final</h2>'
+            + '<div class="today-list today-list-cols"><div class="today-cols-head"><span>Time</span><span>Home</span><span>Match</span><span>Away</span><span>Rink</span></div>' + finals.map(todayRowHtml).join('') + '</div></div>';
         }
-        html += '</div>';
+        if (upcoming.length) {
+          html += '<div class="card today-card"><h2>Upcoming</h2>'
+            + '<div class="today-list today-list-cols"><div class="today-cols-head"><span>Time</span><span>Home</span><span>Match</span><span>Away</span><span>Rink</span></div>' + upcoming.map(todayRowHtml).join('') + '</div></div>';
+        }
       }
       return html;
     }
 
     // Fill scores from the separate (slower) scores endpoint and re-render.
     async function loadTodayScores(force=false) {
+      const prev = {};
+      state.todayGames.forEach(g => {
+        if (g.home_id) prev[g.home_id + '|' + g.away_id] = [g.home_score, g.away_score];
+      });
       const data = await api('/api/today/scores', force);
       if (data.error || !data.games) return;
-      // merge by both team ids
       const byIds = {};
       data.games.forEach(g => { byIds[`${g.home_id}|${g.away_id}`] = g; });
       state.todayGames.forEach(g => {
         const s = byIds[`${g.home_id}|${g.away_id}`];
-        if (s && s.played) {
+        if (!s) return;
+        if (s.status) g.status = s.status;
+        if (s.is_final) g.is_final = true;
+        if (s.played) {
+          const before = prev[g.home_id + '|' + g.away_id] || [];
+          if (before[0] !== s.home_score || before[1] !== s.away_score) {
+            g._flash = true; // scoreboard re-render flashes the changed digits
+          }
           g.home_score = s.home_score;
           g.away_score = s.away_score;
           g.home_periods = s.home_periods;
@@ -905,7 +1139,29 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         }
       });
       syncLivePolling(state.todayGames);
-      if (state.tab === 'today') setMainHtml(todayPageHtml());
+      if (state.tab === 'today') {
+        setMainHtml(todayPageHtml());
+        flashChangedScores();
+        if (state.myTeam) loadMyTeamHero(state.myTeam, false);
+      }
+    }
+
+    // Pulse the score numerals that just changed (broadcast goal flash).
+    function flashChangedScores() {
+      if (!state.todayGames.some(g => g._flash)) return;
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.sb-card[data-status="live"]').forEach(card => {
+          const nums = card.querySelectorAll('.sb-num');
+          // flash both sides; the change is momentary and symmetric is fine
+          nums.forEach(n => {
+            n.classList.remove('flash');
+            void n.offsetWidth; // restart animation
+            n.classList.add('flash');
+            setTimeout(() => n.classList.remove('flash'), 950);
+          });
+        });
+        state.todayGames.forEach(g => { g._flash = false; });
+      });
     }
 
     async function renderToday(refresh) {
@@ -931,23 +1187,71 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const rankIdx = standings.findIndex(s => s.team_id === teamId);
       const rank = rankIdx >= 0 ? rankIdx + 1 : 0;
       const total = standings.length;
+      const rankSuffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
 
-      let inner = `<div class="hero-top"><span class="hero-team link" onclick="setTab('team')">${esc(over.team_name)}</span>`;
-      if (form.played) inner += `<span class="hero-record">${form.record}${form.streak ? ' · ' + form.streak : ''}</span>`;
-      if (rank) inner += `<span class="hero-rank">${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'} of ${total}</span>`;
-      inner += '</div>';
+      // Playoff-race badge (same states as the team tab)
+      const raceBadge = (() => {
+        const r = data.race;
+        if (!r) return '';
+        if (r.status === 'clinched') return '<span class="race-badge clinched">Clinched</span>';
+        if (r.status === 'eliminated') return '<span class="race-badge eliminated">Eliminated</span>';
+        if (r.status === 'playoffs') return '<span class="race-badge playoffs">Playoffs</span>';
+        if (r.status === 'help') return '<span class="race-badge help">Needs help</span>';
+        if (r.status === 'alive' && r.magic > 0) return `<span class="race-badge alive">Magic # ${r.magic}</span>`;
+        return '';
+      })();
+
+      // Team name with union-blue glow behind it — whole name opens the team tab
+      // FIX PASS R1-B (5): hero-top is normal flex flow; no absolute positioning,
+      // so long names wrap instead of clipping off-card (the x=-63 bug)
+      let inner = `<div class="hero-top"><span class="hero-name-wrap hero-glow"><span class="hero-team link" onclick="setTab('team')" title="Open team page">${esc(over.team_name)}</span></span>${raceBadge}</div>`;
+
+      // KPI tiles: Record / Points / Streak / Position / Goal Diff
+      if (form.played) {
+        const s = form.streak || '';
+        const streakClass = s.startsWith('W') ? 'win' : (s.startsWith('L') ? 'loss' : (s.startsWith('O') ? 'otl' : 'tie'));
+        inner += `<div class="record-row hero-kpis">`
+          + `<div class="stat-box"><div class="num">${esc(form.record)}</div><div class="label">Record</div></div>`
+          + `<div class="stat-box"><div class="num">${esc(String(form.points ?? '-'))}</div><div class="label">Points</div></div>`
+          + `<div class="stat-box"><div class="num"><span class="streak-badge ${streakClass}">${esc(s || '\u2014')}</span></div><div class="label">Streak</div></div>`
+          + (rank ? `<div class="stat-box"><div class="num num-of">${rank}${rankSuffix} <span class="of">of ${total}</span></div><div class="label">Position</div></div>` : '')
+          + `<div class="stat-box"><div class="num">${form.goal_diff > 0 ? '+' + form.goal_diff : esc(String(form.goal_diff ?? '-'))}</div><div class="label">Goal Diff</div></div>`
+          + `</div>`;
+
+        // Last 5 results, big chips
+        const chips = (form.form || []).slice(-5);
+        if (chips.length) {
+          inner += `<div class="hero-form-row"><span class="hero-label">Last 5</span><span class="form-chips hero-form">`
+            + chips.map(r => { const rl = String(r).toLowerCase(); return `<span class="form-chip ${rl}" aria-label="${chipLabel(rl)}">${esc(String(r).toUpperCase())}</span>`; }).join('')
+            + `</span></div>`;
+        }
+      }
 
       if (over.recent_result) {
         const r = over.recent_result;
         const isHome = r.home_id === teamId;
-        const us = isHome ? r.home_final : r.away_final;
-        const them = isHome ? r.away_final : r.home_final;
-        const res = us > them ? 'w' : (us < them ? 'l' : 't');
-        inner += `<div class="hero-line"><span class="hero-label">Last</span><span class="form-chip ${res}" aria-label="${chipLabel(res)}">${res.toUpperCase()}</span> <b>${us}\u2013${them}</b> ${isHome ? 'vs' : '@'} ${esc(isHome ? r.away : r.home)}</div>`;
+        // FIX PASS R1-B (4): suppress the whole 'Last' line when the opponent
+        // name is missing — prevents the 'T 0-0 @' dangle
+        const hasOpp = !!(isHome ? r.away : r.home);
+        if (hasOpp) {
+          const us = isHome ? r.home_final : r.away_final;
+          const them = isHome ? r.away_final : r.home_final;
+          const res = us > them ? 'w' : (us < them ? 'l' : 't');
+          inner += `<div class="hero-line"><span class="hero-label">Last</span><span class="form-chip ${res}" aria-label="${chipLabel(res)}">${res.toUpperCase()}</span> <b>${us}\u2013${them}</b> ${isHome ? 'vs' : '@'} ${esc(isHome ? r.away : r.home)}</div>`;
+        }
       }
       if (over.next_game) {
         const ng = over.next_game;
-        inner += `<div class="hero-line"><span class="hero-label">Next</span> <b>${esc(ng.date || 'TBD')}</b> ${fmtTime(ng.time)} \u00b7 ${esc(ng.facility || 'TBD')} \u00b7 ${ng.home_away === 'Home' ? 'vs' : '@'} ${esc(ng.opponent)}</div>`;
+        // Guard both dangles: no opponent name -> no 'vs/@'; no facility -> no sep.
+        const opp = (ng.opponent || '').trim();
+        const fac = (ng.facility || '').trim();
+        inner += `<div class="hero-next">`
+          + `<span class="hero-next-tag"><span class="hero-next-dot"></span>Next</span><span class="hero-next-sep">\u00b7</span>`
+          + `<span>${esc(ng.date || 'TBD')}</span><span class="hero-next-sep">\u00b7</span>`
+          + `<span>${esc(fmtTime(ng.time))}</span>`
+          + (fac ? `<span class="hero-next-sep">\u00b7</span><span>${esc(fac)}</span>` : '')
+          + (opp ? `<span class="hero-next-sep">\u00b7</span><span class="hero-next-vs">${ng.home_away === 'Home' ? 'vs' : '@'} <span class="hero-next-opp">${esc(opp)}</span></span>` : '')
+          + `</div>`;
       }
       el.innerHTML = inner;
     }
@@ -963,7 +1267,13 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       html += '<div id="leagueContent"></div></div>';
       setMainHtml(html);
 
-      if (state.leagueId) await loadLeagueContent(state.leagueId, refresh);
+      if (state.leagueId) {
+        await loadLeagueContent(state.leagueId, refresh);
+      } else if (state.leagues.length) {
+        // First run: never render a silent-empty League tab — auto-select the
+        // first league (chooseLeague persists the pick and loads content).
+        await chooseLeague(state.leagues[0].id);
+      }
     }
 
     function playoffsHtml(playoffs) {
@@ -1044,6 +1354,18 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
       html += '<div id="leagueSecStandings" class="league-sec" style="display:'+(active==='Standings'?'block':'none')+'">';
       const st2 = state.standingsSort;
+      // Playoff-race storytelling: cutoff from the payload (scraper parses the
+      // "top N teams will qualify" note), streak/status only if rows carry them.
+      const stRows = data.standings || [];
+      const hasStreak = stRows.some(s => s.streak !== undefined && s.streak !== null && s.streak !== '');
+      const raceData = stRows.some(s => s.race || s.status);
+      const cutoff = Math.min(data.playoff_cutoff || 4, stRows.length);
+      const maxGp = stRows.length ? Math.max(...stRows.map(s => s.gp || 0)) : 0;
+      const leadPts = stRows.length ? Math.max(...stRows.map(s => s.pts || 0)) : 0;
+      const sortedSt = sortRows(stRows, st2.key, st2.dir, STANDINGS_VAL);
+      const leadIdx = sortedSt.findIndex(s => (s.pts || 0) === leadPts);
+      const cutRow = cutoff >= 1 && cutoff <= sortedSt.length ? sortedSt[cutoff - 1] : null;
+      const stCols = 8 + (hasStreak ? 1 : 0);
       html += '<table><thead><tr>'
         + sortTh('team', 'Team', st2, 'standings')
         + sortTh('gp', 'GP', st2, 'standings', true)
@@ -1053,24 +1375,45 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         + sortTh('pts', 'PTS', st2, 'standings', true)
         + sortTh('gf', 'GF', st2, 'standings', true)
         + sortTh('ga', 'GA', st2, 'standings', true)
+        + (hasStreak ? sortTh('streak', 'STRK', st2, 'standings', true) : '')
         + '</tr></thead><tbody>';
-      html += sortRows(data.standings, st2.key, st2.dir, STANDINGS_VAL).map(s => `
-        <tr class="link" onclick="selectTeam('${s.team_id}')">
-          <td><span class="link">${esc(s.team)}</span></td>
+      html += sortedSt.map((s, i) => {
+        // Race status straight from the payload if present; else simple math:
+        // eliminated when max possible points (2/gp) can't reach the cutoff row.
+        const race = raceData ? (s.race || { status: s.status }) : null;
+        const remaining = Math.max(0, maxGp - (s.gp || 0));
+        const elim = race ? race.status === 'eliminated'
+          : (!!cutRow && (s.pts || 0) + 2 * remaining < (cutRow.pts || 0));
+        const clinch = race ? (race.status === 'clinched' || race.status === 'playoffs') : false;
+        const trCls = ['link', clinch ? 'clinch' : '', elim ? 'elim' : ''].filter(Boolean).join(' ');
+        let streakCell = '';
+        if (hasStreak) {
+          const m = /^([WL])(\d+)$/.exec(String(s.streak || ''));
+          streakCell = m
+            ? `<span class="strk ${m[1] === 'W' ? 'strk-w' : 'strk-l'}">${m[1]}${m[2]}</span>`
+            : (s.streak ? esc(s.streak) : '<span class="strk-dash">&ndash;</span>');
+        }
+        const cutLine = (i === cutoff && cutoff > 0 && cutoff < sortedSt.length)
+          ? `<tr class="cut-line"><td colspan="${stCols}"><span class="cut-label">PLAYOFF LINE</span></td></tr>`
+          : '';
+        return cutLine + `<tr class="${trCls}" onclick="selectTeam('${s.team_id}')">
+          <td><span class="link">${esc(s.team)}</span>${clinch ? ' <span class="clinch-glyph" title="Clinched playoff spot">&#10003;</span>' : ''}</td>
           <td class="num">${s.gp}</td><td class="num">${s.w}</td><td class="num">${s.l}</td><td class="num">${s.otl}</td>
-          <td class="num">${s.pts}</td><td class="num">${s.gf}</td><td class="num">${s.ga}</td>
-        </tr>`).join('');
+          <td class="num${i === leadIdx ? ' lead-pts' : ''}">${s.pts}</td><td class="num">${s.gf}</td><td class="num">${s.ga}</td>
+          ${hasStreak ? `<td class="num">${streakCell}</td>` : ''}
+        </tr>`;
+      }).join('');
       html += '</tbody></table></div>';
 
       html += '<div id="leagueSecLeaders" class="league-sec" style="display:'+(active==='Leaders'?'block':'none')+'">';
       html += '<h3>Points</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
-      html += data.leaders.points.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += data.leaders.points.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
       html += '<h3 style="margin-top:14px">Goals</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">G</th></tr></thead><tbody>';
-      html += data.leaders.goals.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += data.leaders.goals.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
       html += '<h3 style="margin-top:14px">Assists</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">A</th></tr></thead><tbody>';
-      html += data.leaders.assists.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += data.leaders.assists.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
       html += '</div>';
 
@@ -1430,7 +1773,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         }
         html += changeLeagueHtml();
         html += '<select id="teamSelect"><option value="">Choose your team</option>';
-        state.teams.forEach(t => html += `<option value="${t.id}" ${t.id === state.teamId ? 'selected' : ''}>${t.name}</option>`);
+        state.teams.forEach(t => html += `<option value="${t.id}" ${t.id === state.teamId ? 'selected' : ''}>${esc(t.name)}</option>`);
         html += '</select>';
         html += '<div id="teamContent"></div></div>';
         setMainHtml(html);
@@ -1455,16 +1798,38 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         setMainHtml(html);
         // typeahead is delegated globally — no per-render binding needed
       }
+      loadAllTeams();
     }
 
     async function loadTeamContent(teamId, refresh=false) {
       const $content = $('#teamContent');
+      if (!$content) return;
       $content.innerHTML = skeletonHtml(3);
-      const data = await api(`/api/team/${teamId}`, refresh);
-      if (data.error) { $content.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      // Watchdog: 8s nudge ("still loading") and 20s hard error so the
+      // skeleton can never be the final state of this tab.
+      const wd8 = setTimeout(() => {
+        const c = document.getElementById('teamContent');
+        if (c && c.querySelector('.skeleton')) c.innerHTML = '<div class="empty">Still loading your team\u2026</div>';
+      }, 8000);
+      const wd20 = setTimeout(() => {
+        const c = document.getElementById('teamContent');
+        if (c && (c.querySelector('.skeleton') || (c.firstElementChild && c.firstElementChild.classList.contains('empty')))) {
+          c.innerHTML = teamErrorHtml(teamId, 'Timed out after 20s');
+        }
+      }, 20000);
+      let data = null;
+      let hardFail = null;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 25000);
+        try {
+          const res = await fetch(`/api/team/${teamId}` + (refresh ? '?_=' + Date.now() : ''), { signal: ctrl.signal, cache: 'no-store' });
+          data = await res.json();
+        } finally { clearTimeout(timer); }
+        if (data.error) { $content.innerHTML = `<div class="error">${data.error}</div>`; return; }
 
-      const over = data.overview;
-      const standings = data.standings || [];
+        const over = data.overview;
+        const standings = data.standings || [];
       const rankIdx = standings.findIndex(s => s.team_id === teamId);
       const rank = rankIdx >= 0 ? rankIdx + 1 : 0;
       const rankSuffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
@@ -1501,13 +1866,30 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         html += playoffsHtml(data.playoffs);
       }
 
-      // Season record / historical wins (derived from full schedule)
+      html += '<div id="teamAwardsMount"></div>';
+
+      // Current session record (labeled from ChillerStats breadcrumb) + published awards only
       const form = data.form || {};
-      if (form.played) {
+      const sessionLabel = (data.current_session && data.current_session.label) || data.season || '';
+      const awards = data.awards || [];
+      if (awards.length) {
+        html += '<div class="award-row">';
+        awards.forEach(a => {
+          html += `<span class="award-badge" title="${esc(a.detail || '')}">${esc(a.title || 'Session award')}${a.session && a.session !== sessionLabel ? ' \u00b7 ' + esc(a.session) : ''}</span>`;
+        });
+        html += '</div>';
+      }
+
+      // "Session records" only renders when there is something to show —
+      // a bare heading over an empty card reads as a bug (jury round 1).
+      if (form.played || sessionLabel) {
+        html += '<div class="card session-card" style="padding:12px 14px;margin:0 0 12px"><h3 style="margin-bottom:8px">Session records</h3>';
+        if (form.played) {
+        html += `<div class="picker-hint" style="margin:-4px 0 8px">${esc(sessionLabel || 'Current session')} \u2014 W-L-OTL from ChillerStats standings</div>`;
         const s = form.streak || '';
         const streakClass = s.startsWith('W') ? 'win' : (s.startsWith('L') ? 'loss' : (s.startsWith('O') ? 'otl' : 'tie'));
         html += `<div class="record-row">
-          <div class="stat-box"><div class="num">${form.record}</div><div class="label">Record</div></div>
+          <div class="stat-box"><div class="num">${form.record}</div><div class="label">${esc(sessionLabel || 'Record')}</div></div>
           <div class="stat-box"><div class="num">${form.points ?? '-'}</div><div class="label">Points</div></div>
           <div class="stat-box"><div class="num">${form.home_record}</div><div class="label">Home</div></div>
           <div class="stat-box"><div class="num">${form.away_record}</div><div class="label">Away</div></div>
@@ -1524,17 +1906,28 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
             `<span class="tl-game ${t.result.toLowerCase()}" title="${esc(t.date)} ${t.location === 'H' ? 'vs' : '@'} ${esc(t.opponent)} (${t.score})">${t.result}</span>`
           ).join('') +
           '</div>';
+        } else if (sessionLabel) {
+          html += `<div class="picker-hint">${esc(sessionLabel)} \u2014 no games played yet, so no record to show.</div>`;
+        }
+        html += '</div>';
       }
 
       if (over.next_game) {
         const ng = over.next_game;
-        html += `<div class="game-card"><div class="meta">Next Game ${ng.home_away}</div><div class="matchup"><div class="team">${esc(over.team_name)}</div><span class="vs">vs</span><div class="team">${esc(ng.opponent)}</div></div><div class="meta">${esc(ng.date || 'TBD')} · ${fmtTime(ng.time)} · ${esc(ng.facility || 'TBD')}</div></div>`;
+        // Suppress the 'vs' dangle when the scraper returned no opponent name.
+        const opp = (ng.opponent || '').trim();
+        const matchupHtml = opp
+          ? `<div class="team">${esc(over.team_name)}</div><span class="vs">vs</span><div class="team">${esc(opp)}</div>`
+          : `<div class="team">${esc(over.team_name)}</div>`;
+        html += `<div class="game-card"><div class="meta">Next Game ${ng.home_away}</div><div class="matchup">${matchupHtml}</div><div class="meta">${esc(ng.date || 'TBD')} · ${fmtTime(ng.time)} · ${esc(ng.facility || 'TBD')}</div></div>`;
       }
 
       if (over.recent_result) {
         const r = over.recent_result;
         html += `<div class="game-card"><div class="meta">Recent Result</div><div class="matchup"><div class="team">${esc(r.home)}</div><span class="score">${r.home_final}-${r.away_final}</span><div class="team">${esc(r.away)}</div></div></div>`;
       }
+
+      html += '<div id="teamHistoryMount"></div>';
 
       html += '<h3 style="margin-top:18px">Team Leaders</h3><div class="stat-grid">';
       const leaderKeys = ['points','goals','assists','pim'];
@@ -1631,6 +2024,79 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       $content.innerHTML = html;
       a11yFix($content);
       animateNumbers($content);
+      fillTeamHistory(teamId);
+      } catch (err) {
+        hardFail = (err && err.name === 'AbortError') ? 'Team request timed out'
+          : (err && err.message ? err.message : 'Failed to render team');
+      } finally {
+        clearTimeout(wd8); clearTimeout(wd20);
+        if (hardFail) {
+          const c = document.getElementById('teamContent');
+          if (c) c.innerHTML = teamErrorHtml(teamId, hardFail);
+        }
+      }
+    }
+
+    function teamErrorHtml(teamId, msg) {
+      return `<div class="card"><div class="empty">Couldn\u2019t load your team \u2014 ${esc(msg)}.</div>`
+        + `<button class="small" style="margin-top:10px" onclick="loadTeamContent('${teamId}', true)">Retry</button></div>`;
+    }
+
+    function awardsHtml(awards) {
+      if (!awards || !awards.length) {
+        return '<div class="picker-hint award-empty">No session championship or 1st-place award published for this team.</div>';
+      }
+      let html = '<div class="award-row" role="list">';
+      awards.forEach(a => {
+        const champ = a.kind === 'champion';
+        const title = a.title || (champ ? 'Session champion' : '1st place');
+        const meta = [a.season, a.league].filter(Boolean).join(' \u00b7 ');
+        html += `<span class="award-badge ${champ ? 'champ' : 'place'}" role="listitem" title="${esc(a.detail || a.score || '')}">${esc(title)}${meta ? ' \u00b7 ' + esc(meta) : ''}</span>`;
+      });
+      html += '</div>';
+      return html;
+    }
+
+    function previousSessionsHtml(rows, empty) {
+      let html = '<h3 style="margin-top:18px">Previous sessions</h3>';
+      if (!rows || !rows.length) {
+        html += '<div class="empty-history">' + (empty || 'No previous sessions on ChillerStats for this team.') + '</div>';
+        return html;
+      }
+      html += '<table class="history-table"><thead><tr><th>Session</th><th>League</th><th class="num">GP</th><th class="num">W-L-OTL</th><th class="num">PTS</th><th class="num">GF</th><th class="num">GA</th><th>Finish</th></tr></thead><tbody>';
+      html += rows.map(r => {
+        const finish = r.champion ? 'Champion' : (r.first_place ? '1st' : (r.rank ? r.rank + (r.teams ? ' of ' + r.teams : '') : '—'));
+        const po = r.playoff_record ? ` <span class="hist-po">Playoffs ${esc(r.playoff_record)}</span>` : '';
+        return `<tr>
+          <td>${esc(r.season)}</td><td>${esc(r.league)}</td>
+          <td class="num">${r.gp}</td><td class="num">${esc(r.record)}</td>
+          <td class="num">${r.pts}</td><td class="num">${r.gf}</td><td class="num">${r.ga}</td>
+          <td>${finish}${po}</td>
+        </tr>`;
+      }).join('');
+      html += '</tbody></table>';
+      return html;
+    }
+
+    async function fillTeamHistory(teamId) {
+      const $aw = document.getElementById('teamAwardsMount');
+      const $hi = document.getElementById('teamHistoryMount');
+      if ($hi) $hi.innerHTML = '<div class="hist-loading">Loading session history…</div>';
+      try {
+        const data = await api(`/api/team/${teamId}/history`);
+        if ($aw) {
+          $aw.innerHTML = awardsHtml(data.awards || []);
+        }
+        if ($hi) {
+          if (data.error && !(data.previous && data.previous.length) && !(data.awards && data.awards.length)) {
+            $hi.innerHTML = previousSessionsHtml([], 'Session history is unavailable right now.');
+          } else {
+            $hi.innerHTML = previousSessionsHtml(data.previous || [], data.partial ? 'Still gathering older sessions from ChillerStats…' : undefined);
+          }
+        }
+      } catch (e) {
+        if ($hi) $hi.innerHTML = previousSessionsHtml([], 'Session history is unavailable right now.');
+      }
     }
 
     async function renderPlayers(refresh) {
@@ -1642,8 +2108,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       loadAllPlayers();
 
       // Player lookup at the very top — search any player, tap for all-time stats
-      let html = '<div class="card player-lookup-card"><h2>Player Lookup</h2>' + playerSearchHtml()
-        + '<div class="picker-hint">Search any player across all CAHL teams — tap a name for their all-time stats</div></div>';
+      let html = '<div class="card player-lookup-card"><h2>Player Lookup</h2>' + playerSearchHtml() + '</div>';
 
       // Full sortable leaderboard with level filters
       html += leaderboardHtml();
@@ -1686,8 +2151,8 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         teamName: opts.teamName || '',
         playerName: opts.playerName || '',
       };
-      if (opts.playerId && opts.teamId) renderPlayerProfile(opts.teamId, opts.playerId, null);
-      else if (opts.token) renderPlayerProfile(null, null, opts.token);
+      if (opts.token) renderPlayerProfile(null, null, opts.token);
+      else if (opts.playerId && opts.teamId) renderPlayerProfile(opts.teamId, opts.playerId, null);
       else showToast('No profile link for that player');
     };
 
@@ -1795,30 +2260,73 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       let html = `<div class="card"><h2>Analytics · ${data.league_name}</h2>`;
       html += changeLeagueHtml();
 
-      // Points leaders mini chart
-      const maxPts = Math.max(...data.standings.map(s => s.pts), 1);
-      html += '<h3>Standings by Points</h3>';
-      html += data.standings.map(s => `
-        <div style="margin-bottom:8px" onclick="selectTeam('${s.team_id}')">
-          <div style="display:flex;justify-content:space-between;font-size:13px"><span class="link">${s.team}</span><span>${s.pts} pts</span></div>
-          <div class="bar"><div class="fill gf" style="width:${(s.pts / maxPts * 100).toFixed(1)}%"></div></div>
-        </div>`).join('');
+      // Sorted once: points desc, goal diff tiebreak. "Bye Week" rows are
+      // schedule placeholders from ChillerStats, not teams — keep them out
+      // of every standings-derived visual.
+      const isByeWeek = (s) => /^bye\s*week$/i.test(String((s && s.team) || '').trim());
+      const standings = (data.standings || []).filter(s => !isByeWeek(s))
+        .slice().sort((a, b) => (b.pts - a.pts) || (((b.gf || 0) - (b.ga || 0)) - ((a.gf || 0) - (a.ga || 0))));
 
-      // Goals for vs against
-      const maxG = Math.max(...data.standings.map(s => Math.max(s.gf, s.ga)), 1);
-      html += '<h3 style="margin-top:18px">Goals For vs Against</h3>';
-      html += data.standings.slice(0, 8).map(s => `
-        <div style="margin-bottom:10px" onclick="selectTeam('${s.team_id}')">
-          <div style="display:flex;justify-content:space-between;font-size:13px"><span class="link">${s.team}</span><span><span style="color:var(--accent-2)">GF ${s.gf}</span> / <span style="color:var(--danger)">GA ${s.ga}</span></span></div>
-          <div class="bar" title="GF green, GA red"><div class="fill gf" style="width:${(s.gf / (s.gf + s.ga || 1) * 100).toFixed(1)}%"></div><div class="fill ga" style="width:${(s.ga / (s.gf + s.ga || 1) * 100).toFixed(1)}%"></div></div>
-        </div>`).join('');
+      // SEASON HEAT — top 8 teams by points, pure-CSS bar race (no chart libs)
+      if (standings.length) {
+        const top8 = standings.slice(0, 8);
+        const maxPts = Math.max(...top8.map(s => s.pts || 0), 1);
+        html += '<h3>SEASON HEAT</h3><div class="heat-chart">';
+        // Three separate cells: name (flex:1) | bar | mono points. The old
+        // markup nested the number INSIDE the bar, fusing "Nomads" + "0".
+        html += top8.map((s, i) => {
+          const pct = Math.max(2, Math.round(((s.pts || 0) / maxPts) * 1000) / 10);
+          return `<div class="heat-row" title="${esc(s.team)} \u2014 ${s.pts || 0} pts in ${s.gp || 0} GP" onclick="selectTeam('${s.team_id}')">` +
+            `<span class="heat-name">${esc(s.team)}</span>` +
+            `<div class="heat-track" aria-hidden="true"><div class="heat-bar${i === 0 ? ' heat-bar--lead' : ''}" data-w="${pct}" style="width:0%"></div></div>` +
+            `<span class="heat-val">${s.pts || 0}</span></div>`;
+        }).join('');
+        html += '</div>';
 
-      // Top scorers
-      html += '<h3 style="margin-top:18px">Top Scorers</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
-      html += data.leaders.points.map(p => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td><span class="link">${p.name}</span></td><td>${p.team}</td><td class="num">${p.value}</td></tr>`).join('');
+        // GOAL DIFF — each team is a dot (>=10px, tooltip via title) on an
+        // axis around the .500 line (left = under, red; right = over, blue).
+        // Abbreviations live in their own row BELOW the axis so they never
+        // collide with the dots.
+        const abbrev = (name) => {
+          const w = String(name || '?').trim().split(/\s+/);
+          return (w.length >= 3 ? w[0][0] + w[1][0] + w[2][0] : w.length === 2 ? w[0][0] + w[1][0] : w[0].slice(0, 3)).toUpperCase();
+        };
+        const hasGoals = standings.some(s => (s.gf || 0) !== 0 || (s.ga || 0) !== 0);
+        html += '<h3>GOAL DIFF</h3>';
+        if (!hasGoals) {
+          // Preseason: every GF/GA is 0 — a row of dots stacked on the line
+          // is a lie. Say so plainly instead of rendering an empty axis.
+          html += '<div class="gd-empty">No goal data yet \u2014 season hasn\u2019t started</div>';
+        } else {
+          const gdMax = Math.max(...standings.map(s => Math.abs((s.gf || 0) - (s.ga || 0))), 1);
+          const gdRows = standings.map((s) => {
+            const gd = (s.gf || 0) - (s.ga || 0);
+            const x = Math.min(96, Math.max(4, 50 + (gd / gdMax) * 46)).toFixed(1);
+            return { s, gd, x, tone: gd > 0 ? 'pos' : (gd < 0 ? 'neg' : 'zero') };
+          });
+          html += '<div class="gd-chart"><div class="gd-axis"><span class="gd-line" aria-hidden="true"></span><span class="gd-line-label">.500</span>';
+          html += gdRows.map(r =>
+            `<span class="gd-dot gd-dot--${r.tone}" style="left:${r.x}%" title="${esc(r.s.team)} ${r.gd > 0 ? '+' : ''}${r.gd} (${r.s.gf || 0} GF / ${r.s.ga || 0} GA)"></span>`
+          ).join('');
+          html += '</div><div class="gd-labels" aria-hidden="true">';
+          html += gdRows.map((r, i) =>
+            `<span class="gd-abbr${i % 2 ? ' gd-abbr--alt' : ''}" style="left:${r.x}%">${abbrev(r.s.team)}</span>`
+          ).join('');
+          html += `</div></div><div class="viz-hint">LEFT of line = under .500 (red) \u00b7 RIGHT = over (blue)</div>`;
+        }
+      }
+
+      // League leaders — kept, restyled with mono position chips
+      const leaders = data.leaders || {};
+      html += '<h3>Top Scorers</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
+      html += (leaders.points || []).map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td><span class="pos-chip${i === 0 ? ' pos-chip--1' : (i < 3 ? ' pos-chip--2' : '')}">${i + 1}</span><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table></div>';
 
       setMainHtml(html);
+      // Grow the heat bars in via CSS transition (snaps instantly under reduced motion)
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        $main.querySelectorAll('.heat-bar[data-w]').forEach(el => { el.style.width = el.dataset.w + '%'; });
+      }));
     }
 
     // Toast + screen-reader announcements
@@ -1843,6 +2351,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
 
     // Public helpers for inline event handlers
     window.setTab = setTab;
+    window.loadTeamContent = (teamId, refresh) => loadTeamContent(teamId, !!refresh);
     // Browsing a team (game rows, standings, compare) — does NOT change your saved team
     window.selectTeam = (teamId) => {
       if (!teamId) return;
@@ -1922,11 +2431,11 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     // Team/player search typeaheads — fully delegated (re-renders can't leak listeners)
     $main.addEventListener('focusin', e => {
       if (e.target.id === 'teamSearch') loadAllTeams();
-      if (e.target.id === 'playerSearch') loadAllPlayers();
+      if (e.target.id === 'playerSearch' && e.target.value.trim().length >= 2) renderPlayerTypeahead(e.target);
     });
 
     $main.addEventListener('input', e => {
-      if (e.target.id === 'teamSearch') renderTypeahead(e.target);
+      if (e.target.id === 'teamSearch') { taClearStale(e.target); renderTypeahead(e.target); }
       if (e.target.id === 'playerSearch') renderPlayerTypeahead(e.target);
     });
 
@@ -1955,6 +2464,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         if (isTeam) pickSearchedTeam(pick.dataset.tid, pick.dataset.lid);
         else openPlayer({
           token: pick.dataset.ptoken,
+          playerId: pick.dataset.pid,
           teamId: pick.dataset.tid,
           teamName: pick.dataset.tname,
           playerName: pick.dataset.pname,
@@ -1978,7 +2488,7 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
     $main.addEventListener('click', async (e) => {
       // Player lookup item selection — must come BEFORE the team check,
       // because player items also carry data-tid for game-log context
-      const paItem = e.target.closest('.typeahead-item[data-ptoken]');
+      const paItem = e.target.closest('.typeahead-item[data-pname]');
       if (paItem) {
         const input = $('#playerSearch');
         const box = $('#playerSuggest');
@@ -1986,10 +2496,17 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
         if (box) paClose(input, box);
         openPlayer({
           token: paItem.dataset.ptoken,
+          playerId: paItem.dataset.pid,
           teamId: paItem.dataset.tid,
           teamName: paItem.dataset.tname,
           playerName: paItem.dataset.pname,
         });
+        return;
+      }
+      const lookupRetry = e.target.closest('[data-plookupretry]');
+      if (lookupRetry) {
+        const input = $('#playerSearch');
+        if (input) renderPlayerTypeahead(input);
         return;
       }
 
@@ -2020,6 +2537,11 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
       const retryEl = e.target.closest('[data-pretry]');
       if (retryEl) {
         loadAllPlayers(true);
+        return;
+      }
+      const tretry = e.target.closest('[data-tretry]');
+      if (tretry) {
+        loadAllTeams(true);
         return;
       }
 
@@ -2185,8 +2707,239 @@ if ($ver) $ver.textContent = 'v' + JS_VERSION;
           loadActiveTab(true);
         }, 30000);
       }
+      // Data stamp: "UPDATED HH:MM" — 24h-safe (no AM/PM, no "tonight").
+      const stampEl = document.getElementById('dataStamp');
+      if (stampEl) {
+        const hhmm = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        stampEl.textContent = hhmm;
+      }
+      // Hash deep-link restore: read the hash BEFORE setTab (setTab's
+      // replaceState strips it when restoring the default 'today' tab).
+      // Lowercased first so deep links like #Team/#LEAGUE are accepted
+      // (TABS/TAB_HASH are lowercase-only).
+      const bootHash = location.hash.slice(1).trim().toLowerCase();
       setTab(state.tab);
-      // Prefetch the big aggregates in the background so pickers are warm on arrival
+      if (TABS.includes(bootHash) && bootHash !== state.tab) setTab(bootHash);
+      // Prefetch teams only. Player lookup uses /api/players/lookup so a
+      // boot-time roster fan-out cannot starve a typed name search.
       loadAllTeams();
-      loadAllPlayers();
     })();
+
+    /* ============================================================
+       ⌘K COMMAND PALETTE — search players / teams / pages.
+       Lives inside the IIFE so it can read state (allTeams,
+       allPlayers) and call the same openers the UI uses.
+       ============================================================ */
+    const kpal = {
+      ov: document.getElementById('kpalOv'),
+      q: document.getElementById('kpalQ'),
+      list: document.getElementById('kpalList'),
+      items: [],
+      sel: 0,
+      open: false,
+      playersTried: false,
+    };
+
+    function kpalEsc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function kpalHi(s, query) {
+      const i = query ? s.toLowerCase().indexOf(query.toLowerCase()) : -1;
+      if (i < 0) return kpalEsc(s);
+      return kpalEsc(s.slice(0, i)) + '<mark>' + kpalEsc(s.slice(i, i + query.length)) + '</mark>' + kpalEsc(s.slice(i + query.length));
+    }
+
+    function kpalEnsureData() {
+      loadAllTeams();
+      // Pull the full player index once (cron keeps it warm; ~5.9k players).
+      if (!kpal.playersTried) {
+        kpal.playersTried = true;
+        loadAllPlayers().catch(() => {});
+      }
+    }
+
+    function kpalNavItems() {
+      return [
+        { kind: 'page', icon: 'T', name: "Today's games", sb: 'page', act: () => setTab('today') },
+        { kind: 'page', icon: 'L', name: 'League standings & scores', sb: 'page', act: () => setTab('league') },
+        { kind: 'page', icon: 'P', name: 'Players & leaderboard', sb: 'page', act: () => setTab('players') },
+        { kind: 'page', icon: 'A', name: 'Analytics', sb: 'page', act: () => setTab('analytics') },
+        { kind: 'page', icon: '★', name: 'My team', sb: 'page', act: () => setTab('team') },
+      ];
+    }
+
+    function kpalQuery(query) {
+      const qq = (query || '').trim().toLowerCase();
+      const teams = (state.allTeams || []);
+      const players = (state.allPlayers || []);
+
+      // index: name → {players, teams} built once per keystroke from caches
+      let items = [];
+      if (!qq) {
+        items = kpalNavItems();
+      } else {
+        const pages = kpalNavItems().filter(p => p.name.toLowerCase().includes(qq));
+        const teamHits = teams
+          .filter(t => (t.name || '').toLowerCase().includes(qq))
+          .slice(0, 6)
+          .map(t => ({ kind: 'team', icon: '≡', name: t.name, id: t.id, sb: 'team page', act: () => window.selectTeam(t.id) }));
+        const playerHits = players
+          .filter(p => (p.name || '').toLowerCase().includes(qq))
+          .sort((a, b) => a.name.toLowerCase().indexOf(qq) - b.name.toLowerCase().indexOf(qq))
+          .slice(0, 8)
+          .map(kpalPlayerItem);
+        items = [...teamHits, ...playerHits, ...pages];
+
+        // Index not loaded yet (cold start): fall back to the fast server
+        // lookup so typed names still return results immediately.
+        if (!playerHits.length && !players.length && qq.length >= 2) {
+          kpalServerLookup(query);
+          if (!kpal.list.querySelector('.pal-searching')) {
+            items = items.concat([{ kind: 'searching', icon: '…', name: 'Searching the league…', sb: '', act: null }]);
+          }
+        }
+      }
+
+      kpal.items = items;
+      kpal.sel = 0;
+      kpalRender(qq);
+    }
+
+    function kpalPlayerItem(p) {
+      const tok = p.token || '';
+      const pid = p.player_id || '';
+      const tid = p.team_id || '';
+      return {
+        kind: 'player', icon: (p.position || '').slice(0, 2).toUpperCase() || '•',
+        name: p.name, team: p.team,
+        sb: p.team || '',
+        act: () => {
+          if (tok) window.selectPlayerToken(tok);
+          else if (pid && tid) window.selectPlayer(tid, pid);
+          else showToast('No profile link for that player');
+        },
+      };
+    }
+
+    let kpalLookupSeq = 0;
+    let kpalLookupCtrl = null;
+    async function kpalServerLookup(query) {
+      const seq = ++kpalLookupSeq;
+      // Own controller on purpose: lookupPlayers() shares one AbortController
+      // with the Players-tab typeahead, so borrowing it would let the palette
+      // and the tab search abort each other mid-flight (stuck lookups).
+      if (kpalLookupCtrl) kpalLookupCtrl.abort();
+      kpalLookupCtrl = new AbortController();
+      try {
+        const timer = setTimeout(() => kpalLookupCtrl.abort(), 45000);
+        const res = await fetch('/api/players/lookup?q=' + encodeURIComponent(query), {
+          signal: kpalLookupCtrl.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timer);
+        if (seq !== kpalLookupSeq || !kpal.open) return;
+        const result = await res.json();
+        if (seq !== kpalLookupSeq || !kpal.open) return;
+        if (kpal.q.value.trim().toLowerCase() !== query.trim().toLowerCase()) return;
+        const hits = (result && result.players) || [];
+        if (!hits.length) return;
+        // Re-run the query — state.allPlayers may now have data; if not,
+        // inject the lookup hits directly as player items.
+        const qq = query.trim().toLowerCase();
+        const idxPlayers = (state.allPlayers || [])
+          .filter(p => (p.name || '').toLowerCase().includes(qq)).slice(0, 8);
+        const playerItems = idxPlayers.length
+          ? idxPlayers.map(kpalPlayerItem)
+          : hits.map(kpalPlayerItem);
+        const pages = kpalNavItems().filter(p => p.name.toLowerCase().includes(qq));
+        const teamHits = (state.allTeams || [])
+          .filter(t => (t.name || '').toLowerCase().includes(qq))
+          .slice(0, 6)
+          .map(t => ({ kind: 'team', icon: '≡', name: t.name, id: t.id, sb: 'team page', act: () => window.selectTeam(t.id) }));
+        kpal.items = [...teamHits, ...playerItems, ...pages];
+        kpal.sel = 0;
+        kpalRender(qq);
+      } catch (e) { /* palette still works with pages/teams */ }
+    }
+
+    function kpalRender(qq) {
+      if (!kpal.items.length) {
+        kpal.list.innerHTML = '<div class="pal-empty">No matches. Try a player or team name.</div>';
+        return;
+      }
+      let html = '', last = '';
+      kpal.items.forEach((it, i) => {
+        const grp = it.kind === 'player' ? 'Players' : it.kind === 'team' ? 'Teams' : 'Pages';
+        if (grp !== last) { html += `<div class="pal-grp">${grp}</div>`; last = grp; }
+        html += `<div class="pal-item" role="option" data-i="${i}" aria-selected="${i === 0}">
+          <span class="pal-ic${it.kind === 'player' ? ' red' : ''}">${kpalEsc(it.icon)}</span>
+          <span class="pal-nm">${kpalHi(it.name, qq)}</span>
+          <span class="pal-sb">${kpalEsc(it.sb)}</span>
+        </div>`;
+      });
+      kpal.list.innerHTML = html;
+      kpalPaint();
+    }
+
+    function kpalPaint() {
+      kpal.list.querySelectorAll('.pal-item').forEach(el => {
+        el.setAttribute('aria-selected', String(+el.dataset.i === kpal.sel));
+      });
+      const on = kpal.list.querySelector('.pal-item[aria-selected="true"]');
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+
+    function kpalOpen() {
+      kpal.open = true;
+      kpal.ov.classList.add('open');
+      kpal.ov.setAttribute('aria-hidden', 'false');
+      kpal.q.value = '';
+      kpalEnsureData();
+      kpalQuery('');
+      setTimeout(() => kpal.q.focus(), 15);
+    }
+
+    function kpalClose() {
+      kpal.open = false;
+      kpal.ov.classList.remove('open');
+      kpal.ov.setAttribute('aria-hidden', 'true');
+    }
+
+    function kpalToggle() { kpal.open ? kpalClose() : kpalOpen(); }
+
+    function kpalRun() {
+      const it = kpal.items[kpal.sel];
+      kpalClose();
+      if (it && it.act) it.act();
+    }
+
+    document.getElementById('kpalBtn').addEventListener('click', kpalToggle);
+    kpal.ov.addEventListener('click', e => { if (e.target === kpal.ov) kpalClose(); });
+    kpal.q.addEventListener('input', () => kpalQuery(kpal.q.value));
+    kpal.q.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { kpal.sel = Math.min(kpal.sel + 1, kpal.items.length - 1); kpalPaint(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { kpal.sel = Math.max(kpal.sel - 1, 0); kpalPaint(); e.preventDefault(); }
+      else if (e.key === 'Enter') { kpalRun(); }
+    });
+    kpal.list.addEventListener('click', e => {
+      const el = e.target.closest('.pal-item');
+      if (!el) return;
+      kpal.sel = +el.dataset.i;
+      kpalRun();
+    });
+    kpal.list.addEventListener('mousemove', e => {
+      const el = e.target.closest('.pal-item');
+      if (el) { kpal.sel = +el.dataset.i; kpalPaint(); }
+    });
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        kpalToggle();
+      } else if (e.key === 'Escape' && kpal.open) {
+        kpalClose();
+      }
+    });
+    window.__kpal = kpal;

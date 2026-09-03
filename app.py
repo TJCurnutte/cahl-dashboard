@@ -1,5 +1,6 @@
 import os
 import socket
+import time
 import concurrent.futures
 from flask import Flask, jsonify, render_template, request
 
@@ -31,6 +32,11 @@ def no_cache_html(resp):
     # Always serve the shell fresh; static assets are versioned with ?v=N.
     if resp.content_type and resp.content_type.startswith("text/html"):
         resp.headers["Cache-Control"] = "no-store"
+    # Live scores must not sit behind a CDN/browser cache.
+    path = request.path or ""
+    if path.startswith("/api/today"):
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Pragma"] = "no-cache"
     return resp
 
 
@@ -49,14 +55,16 @@ def today():
     return jsonify(data)
 
 
-@app.route("/api/today/scores")
-def today_scores():
-    """Live/final scores for today's games (separate slower path).
-    Uses the warm teams cache to fetch only game-night dashboards; cold starts
-    fall back to all leagues, soft-timed so the endpoint always answers."""
+_SCORES_COND = __import__("threading").Condition()
+_SCORES_FLIGHT = {"result": None, "ts": 0.0, "inflight": False, "gen": 0}
+_SCORES_MEMO_S = 20  # serve cached result to pollers within this window
+
+
+def _today_scores_compute():
+    """Shared body: parse homepage + enrich with live scores. Raises on hard error."""
     data, err = scraper.parse_homepage()
     if err:
-        return jsonify({"error": err}), 502
+        raise RuntimeError(err)
     try:
         league_ids = None
         if _TEAMS_CACHE["data"]:
@@ -68,10 +76,53 @@ def today_scores():
                         league_ids.add(by_id[tid])
             if not league_ids:
                 league_ids = None
-        scraper.enrich_today_scores(data, league_ids=league_ids, timeout=45)
+        scraper.enrich_today_scores(data, league_ids=league_ids, timeout=45, fresh=True)
     except Exception as e:
         print(f"[today_scores] enrich failed: {e}")  # never swallow silently
-    return jsonify({"games": data.get("today", [])})
+    return {"games": data.get("today", [])}
+
+
+@app.route("/api/today/scores")
+def today_scores():
+    """Live/final scores for today's games (separate slower path).
+    Single-flight: the first requester computes; concurrent pollers wait for
+    that result (or reuse a fresh one) instead of stampeding the source site —
+    the stampede is what made live scores stick for everyone at once."""
+    now = time.time()
+    my_gen = None
+    with _SCORES_COND:
+        if (_SCORES_FLIGHT["result"] is not None
+                and now - _SCORES_FLIGHT["ts"] < _SCORES_MEMO_S):
+            return jsonify(_SCORES_FLIGHT["result"])
+        if _SCORES_FLIGHT["inflight"]:
+            my_gen = _SCORES_FLIGHT["gen"]
+            # Wait up to ~55s for the in-flight computation to land.
+            _SCORES_COND.wait(timeout=55)
+            f = _SCORES_FLIGHT
+            if (f["result"] is not None and f["gen"] != my_gen
+                    and time.time() - f["ts"] < 90):
+                return jsonify(f["result"])
+            # Timed out or stale — fall through and compute our own.
+            if _SCORES_FLIGHT["inflight"]:
+                my_gen = None  # we'll compute; first-completed wins the memo
+        if my_gen is None:
+            _SCORES_FLIGHT["inflight"] = True
+            _SCORES_FLIGHT["gen"] += 1
+    try:
+        payload = _today_scores_compute()
+    except RuntimeError as e:
+        with _SCORES_COND:
+            if _SCORES_FLIGHT["inflight"]:
+                _SCORES_FLIGHT["inflight"] = False
+                _SCORES_COND.notify_all()
+        return jsonify({"error": str(e)}), 502
+    with _SCORES_COND:
+        _SCORES_FLIGHT["result"] = payload
+        _SCORES_FLIGHT["ts"] = time.time()
+        _SCORES_FLIGHT["inflight"] = False
+        _SCORES_FLIGHT["gen"] += 1
+        _SCORES_COND.notify_all()
+    return jsonify(payload)
 
 
 @app.route("/api/leaders")
@@ -111,34 +162,90 @@ def team(team_id):
     race = {}
     team_race = None
     playoffs = []
+    championship = None
+    season = (over or {}).get("season") or ""
+    league_name = ""
     if not e5 and sessions_data:
         cutoff = sessions_data.get("playoff_cutoff")
         race = scraper.compute_playoff_race(stand or [], len(sched or []), cutoff)
         team_race = race.get(team_id)
         playoffs = sessions_data.get("playoffs", [])
+        championship = sessions_data.get("championship")
+        season = sessions_data.get("season") or season
+        league_name = sessions_data.get("league_name") or ""
+
+    form = scraper.compute_team_form(sched or [], team_id, team_row)
+    team_name = (over or {}).get("team_name") or ""
+    awards = scraper.awards_for_team(team_id, team_name, championship, stats)
+    previous_sessions = []  # ChillerStats does not publish prior session W-L on team pages
+
+    current_session = None
+    if season or (form and form.get("played")):
+        current_session = {
+            "label": season or "Current session",
+            "record": form.get("record") if form else None,
+            "w": form.get("wins") if form else None,
+            "l": form.get("losses") if form else None,
+            "otl": form.get("otl") if form else None,
+            "ties": form.get("ties") if form else None,
+            "points": form.get("points") if form else None,
+        }
 
     return jsonify({
         "overview": over,
         "schedule": sched,
         "roster": stats,
         "standings": stand,
-        "form": scraper.compute_team_form(sched or [], team_id, team_row),
+        "form": form,
         "race": team_race,
         "playoffs": playoffs,
+        "season": season,
+        "league_name": league_name,
+        "championship": championship,
+        "awards": awards,
+        "current_session": current_session,
+        "previous_sessions": previous_sessions,
     })
 
 
-def _all_teams_cached():
+_HISTORY_CACHE = {}
+_HISTORY_TTL = 21600  # 6 hours; past sessions rarely change
+
+
+@app.route("/api/team/<team_id>/history")
+def team_history(team_id):
+    """Previous-session W-L-OTL and championship/1st-place awards.
+
+    Separate from /api/team so the main team page is never blocked on
+    roster fan-out. Cached aggressively; partial results are not stored.
+    """
+    import time
+    now = time.time()
+    cached = _HISTORY_CACHE.get(team_id)
+    if cached and now - cached["ts"] < _HISTORY_TTL:
+        return jsonify(cached["data"])
+    data, err = scraper.parse_team_history(team_id, timeout=20)
+    if err:
+        return jsonify({"error": err, "previous": [], "awards": [], "sessions": []}), 502
+    payload = data or {"previous": [], "awards": [], "sessions": []}
+    if data and not data.get("partial"):
+        _HISTORY_CACHE[team_id] = {"data": payload, "ts": now}
+    return jsonify(payload)
+
+
+def _all_teams_cached(timeout=None):
     """The /api/teams aggregate, using its 5-minute cache."""
     import time
     now = time.time()
     if _TEAMS_CACHE["data"] is not None and now - _TEAMS_CACHE["ts"] < _TEAMS_TTL:
         return _TEAMS_CACHE["data"], None
-    data, err = scraper.parse_all_teams()
+    kw = {} if timeout is None else {"timeout": timeout}
+    data, err = scraper.parse_all_teams(**kw)
     if err:
         return None, err
-    _TEAMS_CACHE["data"] = data
-    _TEAMS_CACHE["ts"] = now
+    if data:
+        _TEAMS_CACHE["data"] = data
+        _TEAMS_CACHE["ts"] = now
     return data, None
 
 
@@ -158,6 +265,9 @@ def _sessions_for_team(team_id):
     if not e3:
         sessions_data["playoffs"] = dash.get("playoffs", [])
         sessions_data["playoff_cutoff"] = dash.get("playoff_cutoff")
+        sessions_data["championship"] = dash.get("championship")
+        sessions_data["season"] = dash.get("season") or sessions_data.get("season")
+        sessions_data["league_name"] = dash.get("league_name") or sessions_data.get("league_name")
     return sessions_data, None
 
 
@@ -174,30 +284,107 @@ def teams():
     data, err = scraper.parse_all_teams()
     if err:
         return jsonify({"error": err}), 502
-    _TEAMS_CACHE["data"] = data
-    _TEAMS_CACHE["ts"] = now
-    return jsonify(data)
+    if data:
+        _TEAMS_CACHE["data"] = data
+        _TEAMS_CACHE["ts"] = now
+    return jsonify(data or [])
 
 
-_PLAYERS_CACHE = {"data": None, "ts": 0}
-_PLAYERS_TTL = 1800  # 30 minutes; rosters change slowly, fan-out is expensive
+_PLAYERS_CACHE = {"data": None, "ts": 0, "partial": False}
+_PLAYERS_TTL = 3600  # 1 hour; matches the hourly cron baseline that re-warms it.
+_PLAYERS_COND = __import__("threading").Condition()
+_PLAYERS_FLIGHT = {"inflight": False, "t0": 0.0, "waiters": 0}
+
+
+def _merge_player_index(entries):
+    """Warm the players cache with whatever rosters we have so far."""
+    import time
+    if not entries:
+        return
+    existing = {f"{p['name'].lower()}|{p.get('team_id')}": p for p in (_PLAYERS_CACHE["data"] or [])}
+    existing.update(entries)
+    data = sorted(existing.values(), key=lambda p: p["name"].lower())
+    _PLAYERS_CACHE["data"] = data
+    _PLAYERS_CACHE["ts"] = time.time()
+    _PLAYERS_CACHE["partial"] = True
+
+
+@app.route("/api/players/lookup")
+def players_lookup():
+    """Name search that must return without a 50s roster fan-out."""
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"players": [], "partial": False})
+    ql = q.lower()
+    cached = _PLAYERS_CACHE.get("data")
+    if cached:
+        hits = [p for p in cached if ql in (p.get("name") or "").lower() or ql in (p.get("team") or "").lower()]
+        if hits:
+            return jsonify({"players": hits[:25], "partial": bool(_PLAYERS_CACHE.get("partial"))})
+        if not _PLAYERS_CACHE.get("partial") and cached:
+            return jsonify({"players": [], "partial": False})
+
+    teams_data, err = _all_teams_cached(timeout=20)
+    if err:
+        return jsonify({"error": err, "players": []}), 502
+    hits, partial, indexed, serr = scraper.search_players(q, teams_data, timeout=32)
+    if indexed:
+        _merge_player_index(indexed)
+        if not partial:
+            _PLAYERS_CACHE["partial"] = False
+    if serr and not hits:
+        return jsonify({"error": serr, "players": []}), 502
+    return jsonify({
+        "players": hits[:25],
+        "partial": partial,
+        "fetched": len(indexed),
+        "total": len(teams_data or []),
+    })
 
 
 @app.route("/api/players")
 def players():
-    """Every player on every team across all leagues (for the player lookup)."""
+    """Every player on every team across all leagues (for the full leaderboard)."""
     import time
     from concurrent.futures import ThreadPoolExecutor
     now = time.time()
-    if _PLAYERS_CACHE["data"] is not None and now - _PLAYERS_CACHE["ts"] < _PLAYERS_TTL:
+    if (_PLAYERS_CACHE["data"] is not None
+            and now - _PLAYERS_CACHE["ts"] < _PLAYERS_TTL
+            and not _PLAYERS_CACHE.get("partial")):
         return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False})
 
-    teams_data, err = scraper.parse_all_teams()
+    # Single-flight: one rebuild at a time; concurrent requests wait for the
+    # in-flight rebuild instead of each fanning out to ~60 rosters (the
+    # stampede is what made the leaderboard stick for everyone at once).
+    with _PLAYERS_COND:
+        if _PLAYERS_FLIGHT["inflight"] and now - _PLAYERS_FLIGHT["t0"] < 115:
+            _PLAYERS_FLIGHT["waiters"] += 1
+            _PLAYERS_COND.wait(timeout=110)
+            _PLAYERS_FLIGHT["waiters"] -= 1
+            c = _PLAYERS_CACHE
+            if (c["data"] is not None and time.time() - c["ts"] < _PLAYERS_TTL
+                    and not c.get("partial")):
+                return jsonify({"players": c["data"], "partial": False})
+            # timed out without a complete cache — compute our own below
+        _PLAYERS_FLIGHT["inflight"] = True
+        _PLAYERS_FLIGHT["t0"] = time.time()
+    try:
+        return _players_rebuild(now)
+    finally:
+        with _PLAYERS_COND:
+            _PLAYERS_FLIGHT["inflight"] = False
+            _PLAYERS_COND.notify_all()
+
+
+def _players_rebuild(now):
+    from concurrent.futures import ThreadPoolExecutor
+    teams_data, err = _all_teams_cached()
     if err:
         return jsonify({"error": err}), 502
 
     index = {}
     errors = []
+    idx_lock = __import__("threading").Lock()
 
     def fetch(team):
         try:
@@ -208,66 +395,41 @@ def players():
         if e:
             errors.append(e)
             return
-        if not roster:
-            return
-        for sec in roster.get("sections", []):
-            for p in sec["players"]:
-                key = f"{p['name'].lower()}|{team['id']}"
-                index[key] = {
-                    "name": p["name"],
-                    "team": team["name"],
-                    "team_id": team["id"],
-                    "league_id": team["league_id"],
-                    "league_name": team["league_name"],
-                    "position": p.get("position") or sec["label"],
-                    "jersey": p.get("jersey", "-"),
-                    "token": p.get("token"),
-                    "gp": p.get("gp", 0),
-                    "g": p.get("g", 0),
-                    "a": p.get("a", 0),
-                    "pts": p.get("pts", 0),
-                    "pim": p.get("pim", 0),
-                }
-        for g in roster.get("goalies", []):
-            key = f"{g['name'].lower()}|{team['id']}"
-            index[key] = {
-                "name": g["name"],
-                "team": team["name"],
-                "team_id": team["id"],
-                "league_id": team["league_id"],
-                "league_name": team["league_name"],
-                "position": "Goalie",
-                "jersey": g.get("jersey", "-"),
-                "token": g.get("token"),
-                "gp": g.get("gp", 0),
-                "g": 0,
-                "a": 0,
-                "pts": 0,
-                "pim": 0,
-                "w": g.get("w", 0),
-                "l": g.get("l", 0),
-                "otl": g.get("otl", 0),
-                "ga": g.get("ga", 0),
-                "gaa": g.get("gaa", 0),
-            }
+        # Workers can still be running when the soft timeout fires and the
+        # main thread sorts/serializes `index` — guard it like search does.
+        with idx_lock:
+            scraper.index_roster(team, roster, index)
 
-    # Soft-timeout the fan-out so the endpoint always answers inside the
-    # function limit. Partial results are returned (never cached); pages that
-    # finished land in the scraper cache, so a follow-up call completes fast.
-    SOFT_TIMEOUT = 50
-    ex = ThreadPoolExecutor(max_workers=12)
+    # Keep this well under the function limit so the UI can clear loading.
+    # ?full=1 (cron warm) gets a much longer window to finish every roster.
+    SOFT_TIMEOUT = 90 if request.args.get("full") else 18
+    ex = ThreadPoolExecutor(max_workers=16)
     futures = [ex.submit(fetch, team) for team in teams_data]
     done, pending = concurrent.futures.wait(futures, timeout=SOFT_TIMEOUT)
     complete = not pending
     ex.shutdown(wait=False, cancel_futures=True)
 
     if not index and errors and not done:
-        return jsonify({"error": "; ".join(errors[:3])}), 502
+        cached = _PLAYERS_CACHE.get("data") or []
+        if cached:
+            return jsonify({"players": cached, "partial": True, "error": "; ".join(errors[:3])})
+        return jsonify({"error": "; ".join(errors[:3]), "players": []}), 502
 
-    data = sorted(index.values(), key=lambda p: p["name"].lower())
-    if complete:
+    # Snapshot under the lock: stragglers from timed-out futures may still be
+    # inserting while we sort — "dictionary changed size during iteration" 500.
+    with idx_lock:
+        snapshot = list(index.values())
+    data = sorted(snapshot, key=lambda p: p["name"].lower())
+    # Never cache an empty result as "complete" — one bad cycle would poison
+    # lookups and the leaderboard for the whole TTL.
+    if data:
         _PLAYERS_CACHE["data"] = data
         _PLAYERS_CACHE["ts"] = now
+        _PLAYERS_CACHE["partial"] = not complete
+    elif not complete:
+        cached = _PLAYERS_CACHE.get("data") or []
+        if cached:
+            return jsonify({"players": cached, "partial": True})
     return jsonify({
         "players": data,
         "partial": not complete,
@@ -342,11 +504,13 @@ def refresh():
     scope = request.args.get("scope", "all")
     scraper.clear_cache()
     _SESSIONS_CACHE.clear()
+    _HISTORY_CACHE.clear()
     if scope == "all":
         _TEAMS_CACHE["data"] = None
         _TEAMS_CACHE["ts"] = 0
         _PLAYERS_CACHE["data"] = None
         _PLAYERS_CACHE["ts"] = 0
+        _PLAYERS_CACHE["partial"] = False
     return jsonify({"ok": True, "scope": scope})
 
 
