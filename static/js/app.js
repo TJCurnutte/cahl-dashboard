@@ -4,10 +4,73 @@ window.addEventListener('pageshow', e => {
   if (e.persisted) location.reload();
 });
 
+// ---- Landing gate: click-through landing page (first visit per session).
+// The gate is server-rendered into the DOM; if 'cahl-entered' is set for
+// this browser session it's removed before first paint so the dashboard
+// loads directly. The CTA sets the flag, hides the gate, and reveals #app.
+try {
+  if (sessionStorage.getItem('cahl-entered')) {
+    const g = document.getElementById('landingGate');
+    if (g) g.remove();
+  }
+} catch (e) { /* private mode */ }
+function gateDismiss() {
+  try { sessionStorage.setItem('cahl-entered', '1'); } catch (e) {}
+  const g = document.getElementById('landingGate');
+  if (g) {
+    g.classList.add('gate-hidden');
+    // Keep the node: the CAHL logo returns visitors here instantly without a
+    // reload (R-owner: logo click = back to the home page).
+    setTimeout(() => { if (g.classList.contains('gate-hidden')) g.style.visibility = 'hidden'; }, 500);
+  }
+  const app = document.getElementById('app');
+  if (app) { app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); }
+  document.getElementById('main')?.focus({ preventScroll: true });
+}
+function gateShow() {
+  try { sessionStorage.removeItem('cahl-entered'); } catch (e) {}
+  const g = document.getElementById('landingGate');
+  if (g) {
+    g.style.visibility = '';
+    g.classList.remove('gate-hidden');
+    const app = document.getElementById('app');
+    if (app) { app.setAttribute('inert', ''); app.setAttribute('aria-hidden', 'true'); }
+    g.querySelector('.lp-hero')?.scrollIntoView({ block: 'start' });
+  } else {
+    location.reload(); // server-rendered gate not in DOM (old tab) — reload restores it
+  }
+}
+['gateEnter', 'gateEnterCta', 'gateEnterFoot'].forEach(id =>
+  document.getElementById(id)?.addEventListener('click', gateDismiss));
+// Brand logo click returns to the landing page (clears the session flag so
+// the full landing renders again, per owner request).
+document.getElementById('brandHome')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  gateShow();
+});
+// R10-2 gate keyboard contract: Escape dismisses; the app behind the modal
+// is made inert so focus/touch can't reach it while the landing is up.
+document.getElementById('landingGate')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.stopPropagation(); gateDismiss(); }
+});
+(function gateInert() {
+  const gate = document.getElementById('landingGate');
+  if (!gate) return;
+  const app = document.getElementById('app');
+  if (app) { app.setAttribute('inert', ''); app.setAttribute('aria-hidden', 'true'); }
+  // Release inert either when dismissed or when the gate node is removed.
+  const release = () => {
+    if (app) { app.removeAttribute('inert'); app.removeAttribute('aria-hidden'); }
+  };
+  document.getElementById('gateEnter')?.addEventListener('click', release);
+  document.getElementById('gateEnterCta')?.addEventListener('click', release);
+  document.getElementById('gateEnterFoot')?.addEventListener('click', release);
+})();
+
 // Frontend version — shown in the badge. The old window.APP_VERSION
 // dual-check is gone (index.html's stale copy caused a reload on every
 // boot); /api/version self-heal below is the only reload path now.
-const JS_VERSION = 54;
+const JS_VERSION = 84;
 
 // Self-heal: if the server is running a NEWER frontend than this cached JS, reload fresh.
 fetch('/api/version').then(r => r.json()).then(v => {
@@ -59,6 +122,32 @@ const $main = document.getElementById('main');
 
     function $(sel){ return document.querySelector(sel); }
     function fmtTime(t){ return t || 'TBD'; }
+
+    // Client error telemetry: fire-and-forget report of render crashes so
+    // browser-specific failures (Safari-only stack overflows etc.) can be
+    // diagnosed from server logs instead of dying as mystery screens.
+    let _lastReportedErr = '';
+    function reportClientError(err) {
+      try {
+        const msg = String((err && err.message) || err || '');
+        if (msg === _lastReportedErr) return; // debounce identical repeats
+        _lastReportedErr = msg;
+        const payload = JSON.stringify({
+          message: msg.slice(0, 300),
+          stack: String((err && err.stack) || '').slice(0, 2000),
+          href: location.href.slice(0, 200),
+          version: window.APP_VERSION || 0,
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/client-error', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+        }
+      } catch (e) { /* telemetry must never throw */ }
+    }
+    window.addEventListener('error', (e) => {
+      if (e && e.error && /call stack|recursion/i.test(String(e.error.message || ''))) reportClientError(e.error);
+    });
 
     // Escape scraped text (team/player names come from chillerstats.com) before HTML injection
     function esc(s) {
@@ -231,9 +320,9 @@ const $main = document.getElementById('main');
     function leaderSection(title, list, valKey) {
       if (!list || !list.length) return '';
       const rows = list.map(p =>
-        `<tr class="link" onclick="selectPlayer('${p.team_id || ''}','${p.player_id || ''}')"><td class="num">${p.rank || ''}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
+        `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id || ''}','${p.player_id}')\" class=\"link\"` : ''}><td class="num">${p.rank || ''}</td><td>${esc(p.name)}</td><td>${esc(p.team)}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
       ).join('');
-      return `<h3 style="margin-top:16px">${title}</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">${title}</th></tr></thead><tbody>${rows}</tbody></table>`;
+      return `<h3 class="section-h mid">${title}</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">${title}</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
 
     // ---- Global team search with typeahead ----
@@ -280,7 +369,9 @@ const $main = document.getElementById('main');
       state.allPlayersLoading = true;
       state.playersError = false;
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 22000);
+      // R10-1: match the shared api() 30s ceiling — the index now takes up to
+      // ~30s cold, and aborting earlier just converted a slow success into an error.
+      const timer = setTimeout(() => ctrl.abort(), 30000);
       try {
         const res = await fetch('/api/players', { signal: ctrl.signal, cache: 'no-store' });
         const data = await res.json();
@@ -479,6 +570,10 @@ const $main = document.getElementById('main');
         box.innerHTML = local.map(playerRowHtml).join('');
       } else if (q.length < 2) {
         box.innerHTML = '<div class="typeahead-item muted">Keep typing a name\u2026</div>';
+      } else if (state.allPlayersLoading || !state.allPlayers.length) {
+        // R7-4: say WHY the first search of the day is slow — the index is
+        // filling server-side; runs once, then results are instant.
+        box.innerHTML = '<div class="typeahead-item muted">Index cold \u2014 first load can take up to a minute, then it\u2019s instant\u2026</div>';
       } else {
         box.innerHTML = '<div class="typeahead-item muted">Searching\u2026</div>';
       }
@@ -594,7 +689,7 @@ const $main = document.getElementById('main');
         const pace = state.allPlayers.slice().sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0)).slice(0, 3);
         html += '<div class="pacemakers"><div class="pacemakers-label">LEAGUE LEADERS</div><div class="pacemakers-row">'
           + pace.map((p, i) => `
-            <div class="pacemaker" onclick="selectPlayerToken('${p.token || ''}')">
+            <div class="pacemaker" role="button" tabindex="0" data-pacemaker="${p.token || ''}" onclick="selectPlayerToken('${p.token || ''}')">
               <span class="pace-name">${esc(p.name)}</span>
               <span class="pace-stat">${p.pts ?? 0}<small>PTS</small></span>
               <span class="pace-team">${esc(p.team)}</span>
@@ -647,15 +742,15 @@ const $main = document.getElementById('main');
         const ppg = p.gp ? p.pts / p.gp : 0;
         const pct = Math.max(4, Math.min(100, ppg / ppgMax * 100));
         return `
-        <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
+        <tr ${p.token ? `onclick=\"selectPlayerToken('${p.token}')\" class=\"link\"` : ''}>
           <td class="num">${i + 1}</td>
-          <td><span class="link">${esc(p.name)}</span></td>
+          <td>${esc(p.name)}</td>
           <td>${esc(p.team)}</td>
           <td>${posChip(p)}</td>
-          <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td>
-          <td class="num">${p.pts}</td>
+          <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td>
+          <td class="num">${p.pts ?? '-'}</td>
           <td class="num"><div class="ppg-bar"><div class="ppg-fill" style="width:${pct.toFixed(1)}%"></div><span class="ppg-median" style="left:${ppgMedianPct.toFixed(1)}%"></span><span class="ppg-val">${p.gp ? ppg.toFixed(2) : '-'}</span></div></td>
-          <td class="num">${p.pim}</td>
+          <td class="num">${p.pim ?? '-'}</td>
         </tr>`;
       }).join('');
       html += '</tbody></table>';
@@ -744,11 +839,13 @@ const $main = document.getElementById('main');
 
     // Count-up animation for purely numeric values (skips "6-6-0", "W3", etc.)
     function animateNumbers(root) {
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       root.querySelectorAll('.stat-box .num, .game-card .score').forEach(el => {
         if (el.dataset.counted) return;
         const m = el.textContent.trim().match(/^([+-]?)(\d+)$/);
         if (!m) return; // non-numeric: leave untouched
         el.dataset.counted = '1';
+        if (reduceMotion) return; // respect prefers-reduced-motion: paint the final value
         const sign = m[1], target = parseInt(m[2], 10), dur = 400;
         const t0 = performance.now();
         (function frame(t) {
@@ -824,16 +921,37 @@ const $main = document.getElementById('main');
     async function api(path, refresh=false) {
       const cacheKey = path.split('?')[0];
       if (!refresh && state.cache[cacheKey]) return state.cache[cacheKey];
+      // Hard 30s ceiling on every API call: a hung request can never leave a
+      // skeleton on screen (jury R4/R5 systemic finding — the last infinite-
+      // wait path). Callers already handle { error } shapes.
+      const ctrl = new AbortController();
+      const kill = setTimeout(() => ctrl.abort(), 30000);
       try {
         const bust = (refresh || path.indexOf('/api/today') === 0)
           ? (path.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()
           : '';
-        const res = await fetch(path + bust, { cache: 'no-store' });
+        // One silent retry on network failure or 5xx: Vercel cold starts and
+        // cell-network blips otherwise surface as full-page errors for what is
+        // a transient condition. The 30s ceiling above still governs the total.
+        let res = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            res = await fetch(path + bust, { cache: 'no-store', signal: ctrl.signal });
+            if (res.ok || attempt === 1) break;
+          } catch (e) {
+            if (attempt === 1 || e.name === 'AbortError') throw e;
+          }
+          await new Promise(r => setTimeout(r, 700));
+        }
         const data = await res.json();
         if (res.ok) state.cache[cacheKey] = data;
         return data;
       } catch (e) {
-        return { error: 'Network error. Try Refresh.' };
+        return { error: e && e.name === 'AbortError'
+          ? 'This took too long — tap Refresh to retry.'
+          : 'Network error. Try Refresh.' };
+      } finally {
+        clearTimeout(kill);
       }
     }
 
@@ -969,7 +1087,11 @@ const $main = document.getElementById('main');
         if (stale()) return;
       } catch (e) {
         if (stale()) return; // a newer tab owns the canvas — don't paint errors over it
-        $main.innerHTML = `<div class="error">Error loading tab: ${e.message}</div>`;
+        // RangeError / overflow crashes get reported with their real stack so
+        // environment-specific repros (Safari-only wording, extension fights)
+        // stop being dead ends.
+        if (e && /call stack|recursion/i.test(String(e.message))) reportClientError(e);
+        $main.innerHTML = `<div class="error">Something broke while loading this tab${e && e.message ? ` \u2014 ${esc(e.message)}` : ''}.<br><button class="ghost small" style="margin-top:10px" onclick="loadActiveTab(true)">Retry</button></div>`;
       }
     }
 
@@ -1084,7 +1206,26 @@ const $main = document.getElementById('main');
     }
 
     function todayPageHtml(data) {
-      let html = '<p class="board-howto">Every game on tonight\u2019s Chiller slate \u2014 live scores land the moment scoring starts.</p>';
+      const games = state.todayGames;
+      const liveNow = games.filter(isLiveGame);
+      const finals = games.filter(g => gameLiveState(g) === 'final');
+      const upcoming = games.filter(g => gameLiveState(g) === 'upcoming');
+
+      /* ---- Night header strip: the "at a glance" band ---- */
+      const rinks = [...new Set(games.map(g => (g.facility || '').replace(/^(?:OhioHealth\s+|NTPRD\s+)?Chiller\s+/i, '') || '—'))];
+      const firstPuck = games.map(g => g.time).filter(Boolean).sort((a, b) => {
+        const pa = a.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i), pb = b.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+        if (!pa || !pb) return 0;
+        const mins = t => ((+t[1] % 12) + (t[3].toUpperCase() === 'PM' ? 12 : 0)) * 60 + +t[2];
+        return mins(pa) - mins(pb);
+      })[0];
+      let html = `<div class="tonight-strip">
+        <div class="tonight-kpi"><span class="tonight-num">${games.length}</span><span class="tonight-label">Games</span></div>
+        <div class="tonight-kpi"><span class="tonight-num">${rinks.length}</span><span class="tonight-label">Rinks</span></div>
+        <div class="tonight-kpi"><span class="tonight-num">${liveNow.length || '\u2014'}</span><span class="tonight-label">Live now</span></div>
+        <div class="tonight-kpi"><span class="tonight-num tonight-time">${esc(firstPuck || '\u2014')}</span><span class="tonight-label">First puck</span></div>
+      </div>`;
+
       if (state.myTeam) {
         html += '<div class="card hero-card" id="myTeamHero"><div class="empty">Loading your team\u2026</div></div>';
       } else {
@@ -1092,12 +1233,39 @@ const $main = document.getElementById('main');
           + '<button class="small" onclick="setTab(\'team\')">Pick My Team</button></div>';
       }
 
-      const liveNow = state.todayGames.filter(isLiveGame);
-      const finals = state.todayGames.filter(g => gameLiveState(g) === 'final');
-      const upcoming = state.todayGames.filter(g => gameLiveState(g) === 'upcoming');
       if (liveNow.length) html += scoreboardHtml(liveNow);
-      if (!state.todayGames.length) {
-        html += '<div class="card today-card"><h2>Today\'s Games</h2><div class="empty">No games posted yet.</div></div>';
+      if (!games.length) {
+        html += '<div class="card today-card"><h2>Today\u2019s Games</h2><div class="empty">No games posted yet.</div></div>';
+        return html;
+      }
+
+      /* ---- Tonight's leaders: who's scoring right now (from live scores) ---- */
+      const scored = games.filter(g => g.played && g.home_score != null);
+      if (scored.length) {
+        html += '<div class="card today-card"><h2>On The Scoreboard</h2>'
+          + '<div class="scored-strip">' + scored.slice(0, 4).map(g =>
+            `<div class="scored-chip"><span class="scored-teams">${esc(g.home)}</span><span class="scored-nums">${g.home_score}</span><span class="scored-teams">${esc(g.away)}</span><span class="scored-nums">${g.away_score}</span></div>`).join('')
+          + '</div></div>';
+      }
+
+      /* ---- Slate grouped by rink: scan by venue ----
+         Include BOTH upcoming and finals so a mixed slate (some final, some
+         upcoming) still groups by rink — finals used to vanish from this view
+         (jury R6-1/R6-2 convergent find). Each row carries its own status chip,
+         so mixed statuses render correctly inside one rink group. */
+      const byRink = {};
+      upcoming.concat(finals).forEach(g => {
+        const r = (g.facility || 'Other').replace(/^(?:OhioHealth\s+|NTPRD\s+)?Chiller\s+/i, '') || 'Other';
+        (byRink[r] = byRink[r] || []).push(g);
+      });
+      const rinkNames = Object.keys(byRink);
+      if (rinkNames.length > 1) {
+        html += '<div class="card today-card"><h2>By Rink</h2>';
+        rinkNames.sort().forEach(r => {
+          html += `<h3 class="rink-head">${esc(r)} \u00b7 ${byRink[r].length}</h3><div class="today-list">`
+            + byRink[r].map(todayRowHtml).join('') + '</div>';
+        });
+        html += '</div>';
       } else {
         if (finals.length) {
           html += '<div class="card today-card"><h2>Final</h2>'
@@ -1108,6 +1276,12 @@ const $main = document.getElementById('main');
             + '<div class="today-list today-list-cols"><div class="today-cols-head"><span>Time</span><span>Home</span><span>Match</span><span>Away</span><span>Rink</span></div>' + upcoming.map(todayRowHtml).join('') + '</div></div>';
         }
       }
+
+      // Sponsor strip: Upright Creative (official league sponsor)
+      html += '<a class="sponsor-strip" href="https://uprightcreativeco.com" target="_blank" rel="noopener" aria-label="Sponsored by Upright Creative">'
+        + '<img src="/static/img/upright-lockup.png" alt="" aria-hidden="true" />'
+        + '<span><span class="sponsor-strip-kicker">Official Sponsor</span>'
+        + '<span class="sponsor-strip-text">Upright Creative \u2014 Photo \u00b7 Video \u00b7 Design</span></span></a>';
       return html;
     }
 
@@ -1166,7 +1340,7 @@ const $main = document.getElementById('main');
 
     async function renderToday(refresh) {
       const data = await api('/api/today', refresh);
-      if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      if (data.error) { $main.innerHTML = `<div class="error">${esc(data.error)}</div>`; return; }
       state.leagues = data.leagues;
       state.todayGames = data.today;
       syncLivePolling(state.todayGames);
@@ -1298,11 +1472,46 @@ const $main = document.getElementById('main');
       return html;
     }
 
+    // Shared skeleton watchdog for lazy sub-sections (league content, analytics
+    // content, player profile game log): a skeleton can never be the final
+    // state — 8s nudge, 20s hard error with retry (same contract as the team tab).
+    function armSkeletonWatchdog($el, label, retryExpr) {
+      if (!$el) return () => {};
+      // R7-4/R8: hard-error deadline (40s) must exceed api()'s 30s ceiling + retry-once,
+      // so "timed out" can never print while the request is still in flight.
+      // Retry taps are debounced via data-retrying so a double-tap can't fire
+      // two overlapping renders.
+      const wd8 = setTimeout(() => {
+        if ($el.isConnected && $el.querySelector('.skeleton')) $el.innerHTML = `<div class="empty">Still loading ${label}\u2026</div>`;
+      }, 8000);
+      const wd40 = setTimeout(() => {
+        if ($el.isConnected && ($el.querySelector('.skeleton') || ($el.firstElementChild && $el.firstElementChild.classList.contains('empty')))) {
+          $el.innerHTML = `<div class="card"><div class="empty">Couldn\u2019t load ${label} \u2014 timed out.</div><button class="ghost small" style="margin-top:10px" data-wd-retry="${retryExpr.replace(/"/g, '&quot;')}">Retry</button></div>`;
+          const btn = $el.querySelector('[data-wd-retry]');
+          if (btn) btn.addEventListener('click', (e) => {
+            if ($el.dataset.retrying) { e.preventDefault(); return; }
+            $el.dataset.retrying = '1';
+            btn.disabled = true;
+            btn.textContent = 'Retrying\u2026';
+            setTimeout(() => { delete $el.dataset.retrying; }, 3000);
+            try { (new Function('return (' + retryExpr + ')'))(); } catch (err) {}
+          });
+        }
+      }, 40000);
+      return () => { clearTimeout(wd8); clearTimeout(wd40); };
+    }
+
     async function loadLeagueContent(leagueId, refresh=false) {
       const $content = $('#leagueContent');
       $content.innerHTML = skeletonHtml(3);
-      const data = await api(`/api/league/${leagueId}`, refresh);
-      if (data.error) { $content.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      const disarm = armSkeletonWatchdog($content, 'league data', `loadLeagueContent('${leagueId}', true)`);
+      let data;
+      try {
+        data = await api(`/api/league/${leagueId}`, refresh);
+      } finally {
+        disarm();
+      }
+      if (data.error) { $content.innerHTML = `<div class="error">${esc(data.error)}</div>`; return; }
 
       // build team list from standings for the team tab
       state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
@@ -1322,7 +1531,7 @@ const $main = document.getElementById('main');
         state._cmpLeague = leagueId;
       }
 
-      let html = `<h3 style="margin:18px 0 10px;color:var(--text)">${data.league_name} <span style="color:var(--muted);font-weight:400">${data.season}</span></h3>`;
+      let html = `<h3 class="section-h league-title">${data.league_name} <span class="league-season">${data.season}</span></h3>`;
 
       html += '<div class="pill-row">';
       const sections = [
@@ -1347,7 +1556,7 @@ const $main = document.getElementById('main');
       html += '<h3>Latest Scores</h3>';
       if (!data.recent.length) html += '<div class="empty">No recent scores yet.</div>';
       html += '<div class="games-grid">' + data.recent.map(g => gameHtml(g)).join('') + '</div>';
-      html += '<h3 style="margin-top:18px">Upcoming</h3>';
+      html += '<h3 class="section-h">Upcoming</h3>';
       if (!data.upcoming.length) html += '<div class="empty">No upcoming games.</div>';
       html += '<div class="games-grid">' + data.upcoming.map(g => gameHtml(g)).join('') + '</div>';
       html += '</div>';
@@ -1407,13 +1616,13 @@ const $main = document.getElementById('main');
 
       html += '<div id="leagueSecLeaders" class="league-sec" style="display:'+(active==='Leaders'?'block':'none')+'">';
       html += '<h3>Points</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
-      html += data.leaders.points.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += data.leaders.points.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"` : ''}><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
-      html += '<h3 style="margin-top:14px">Goals</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">G</th></tr></thead><tbody>';
-      html += data.leaders.goals.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += '<h3 class="section-h mid">Goals</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">G</th></tr></thead><tbody>';
+      html += data.leaders.goals.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"` : ''}><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
-      html += '<h3 style="margin-top:14px">Assists</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">A</th></tr></thead><tbody>';
-      html += data.leaders.assists.map(p => `<tr onclick="selectPlayer('${p.team_id}','${p.player_id}')" class="link"><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += '<h3 class="section-h mid">Assists</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">A</th></tr></thead><tbody>';
+      html += data.leaders.assists.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"` : ''}><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table>';
       html += '</div>';
 
@@ -1468,7 +1677,7 @@ const $main = document.getElementById('main');
         }
         renderSessionsSection();
       } catch (e) {
-        $sec.innerHTML = `<div class="error">${e.message}</div>`;
+        $sec.innerHTML = `<div class="error">${esc(e.message)}</div>`;
       }
     }
 
@@ -1535,7 +1744,7 @@ const $main = document.getElementById('main');
         }
         renderCalendarSection();
       } catch (e) {
-        $sec.innerHTML = `<div class="error">${e.message}</div>`;
+        $sec.innerHTML = `<div class="error">${esc(e.message)}</div>`;
       }
     }
 
@@ -1768,8 +1977,19 @@ const $main = document.getElementById('main');
         // Refetch when the cached team list belongs to a different league
         if (!state.teams.length || state.teamsLeague !== state.leagueId) {
           const data = await api(`/api/league/${state.leagueId}`);
-          state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
-          state.teamsLeague = state.leagueId;
+          // Error payload / partial response guard: fall back to the cached
+          // team list instead of crashing the whole tab render (this was the
+          // "Maximum call stack size exceeded" page-killer on the Team tab).
+          if (!data || data.error || !Array.isArray(data.standings)) {
+            if (!state.teams.length) {
+              setMainHtml(html + `<div class="error">Couldn\u2019t load the team list for this league${data && data.error ? ' \u2014 ' + esc(data.error) : ''}.</div><button class="ghost small" style="margin-top:10px" onclick="loadActiveTab(true)">Retry</button></div>`);
+              loadAllTeams();
+              return;
+            }
+          } else {
+            state.teams = data.standings.map(s => ({ id: s.team_id, name: s.team })).filter(t => t.id);
+            state.teamsLeague = state.leagueId;
+          }
         }
         html += changeLeagueHtml();
         html += '<select id="teamSelect"><option value="">Choose your team</option>';
@@ -1807,16 +2027,9 @@ const $main = document.getElementById('main');
       $content.innerHTML = skeletonHtml(3);
       // Watchdog: 8s nudge ("still loading") and 20s hard error so the
       // skeleton can never be the final state of this tab.
-      const wd8 = setTimeout(() => {
-        const c = document.getElementById('teamContent');
-        if (c && c.querySelector('.skeleton')) c.innerHTML = '<div class="empty">Still loading your team\u2026</div>';
-      }, 8000);
-      const wd20 = setTimeout(() => {
-        const c = document.getElementById('teamContent');
-        if (c && (c.querySelector('.skeleton') || (c.firstElementChild && c.firstElementChild.classList.contains('empty')))) {
-          c.innerHTML = teamErrorHtml(teamId, 'Timed out after 20s');
-        }
-      }, 20000);
+      // R8-2: shared watchdog (8s nudge, 40s hard error, debounced retry) —
+      // replaces the inline 8s/20s pair that raced api()'s 30s ceiling.
+      const disarm = armSkeletonWatchdog($('#teamContent'), 'your team', `loadTeamContent('${teamId}', true)`);
       let data = null;
       let hardFail = null;
       try {
@@ -1826,7 +2039,23 @@ const $main = document.getElementById('main');
           const res = await fetch(`/api/team/${teamId}` + (refresh ? '?_=' + Date.now() : ''), { signal: ctrl.signal, cache: 'no-store' });
           data = await res.json();
         } finally { clearTimeout(timer); }
-        if (data.error) { $content.innerHTML = `<div class="error">${data.error}</div>`; return; }
+        if (data.error) {
+          // R8-A self-heal: a saved team whose upstream page is gone (old
+          // season, renamed slug) must not dead-end the tab forever. Clear the
+          // stale id, fall back to the picker, and let the user re-pick once.
+          const dead = /no longer available/i.test(String(data.error));
+          if (dead) {
+            state.teamId = '';
+            localStorage.removeItem('cahl-team');
+            if (state.myTeam === teamId) { state.myTeam = ''; localStorage.removeItem('cahl-myteam'); }
+            $content.innerHTML = `<div class="card"><div class="empty">${esc(data.error)}</div>`
+              + `<div class="picker-hint" style="margin-top:12px">Pick your team below to save a new one.</div></div>`;
+            renderTeam(); // re-render the card with picker + search visible
+            return;
+          }
+          $content.innerHTML = `<div class="error">${esc(data.error)}</div>`;
+          return;
+        }
 
         const over = data.overview;
         const standings = data.standings || [];
@@ -1852,7 +2081,7 @@ const $main = document.getElementById('main');
         : `<button class="ghost small" onclick="makeMyTeam('${teamId}')" title="Save as your default team">Set as My Team</button>`;
 
       let html = `<div class="team-head">
-        <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
+        <h3 class="team-name-h">${esc(over.team_name)}</h3>
         <div class="team-head-actions">
           ${myTeamBadge}
           ${raceBadge}
@@ -1883,7 +2112,7 @@ const $main = document.getElementById('main');
       // "Session records" only renders when there is something to show —
       // a bare heading over an empty card reads as a bug (jury round 1).
       if (form.played || sessionLabel) {
-        html += '<div class="card session-card" style="padding:12px 14px;margin:0 0 12px"><h3 style="margin-bottom:8px">Session records</h3>';
+        html += '<div class="card session-card" style="padding:12px 14px;margin:0 0 12px"><h3 class="section-h tight">Session records</h3>';
         if (form.played) {
         html += `<div class="picker-hint" style="margin:-4px 0 8px">${esc(sessionLabel || 'Current session')} \u2014 W-L-OTL from ChillerStats standings</div>`;
         const s = form.streak || '';
@@ -1924,12 +2153,17 @@ const $main = document.getElementById('main');
 
       if (over.recent_result) {
         const r = over.recent_result;
-        html += `<div class="game-card"><div class="meta">Recent Result</div><div class="matchup"><div class="team">${esc(r.home)}</div><span class="score">${r.home_final}-${r.away_final}</span><div class="team">${esc(r.away)}</div></div></div>`;
+        // R7-5: same hasOpp guard as the hero — no blank 0-0 card when the
+        // scraper returns a result with a missing team name.
+        const hasOpp = !!((r.home_id === teamId) ? r.away : r.home);
+        if (hasOpp) {
+          html += `<div class="game-card"><div class="meta">Recent Result</div><div class="matchup"><div class="team">${esc(r.home)}</div><span class="score">${r.home_final}-${r.away_final}</span><div class="team">${esc(r.away)}</div></div></div>`;
+        }
       }
 
       html += '<div id="teamHistoryMount"></div>';
 
-      html += '<h3 style="margin-top:18px">Team Leaders</h3><div class="stat-grid">';
+      html += '<h3 class="section-h">Team Leaders</h3><div class="stat-grid">';
       const leaderKeys = ['points','goals','assists','pim'];
       const leaderLabels = {points:'Points', goals:'Goals', assists:'Assists', pim:'PIM'};
       leaderKeys.forEach(k => {
@@ -1938,7 +2172,7 @@ const $main = document.getElementById('main');
       });
       html += '</div>';
 
-      html += '<h3 style="margin-top:18px">Standings</h3>';
+      html += '<h3 class="section-h">Standings</h3>';
       const st = state.standingsSort;
       html += '<table><thead><tr>'
         + sortTh('team', 'Team', st, 'standings')
@@ -1957,7 +2191,7 @@ const $main = document.getElementById('main');
         </tr>`).join('');
       html += '</tbody></table>';
 
-      html += '<h3 style="margin-top:18px">Schedule</h3>';
+      html += '<h3 class="section-h">Schedule</h3>';
       html += '<table><thead><tr><th>Date</th><th>Time</th><th>Facility</th><th>Opponent</th><th class="num">Score</th><th class="num">Sheet</th></tr></thead><tbody>';
       html += data.schedule.map(g => {
         const isHome = g.home_id === teamId;
@@ -1965,14 +2199,14 @@ const $main = document.getElementById('main');
         const oppId = isHome ? g.away_id : g.home_id;
         const score = g.played ? `${g.home_score}-${g.away_score}` : '';
         const sheet = g.score_sheet ? `<a class="link" href="${g.score_sheet}" target="_blank" rel="noopener" title="View official score sheet">\u2197</a>` : '';
-        return `<tr><td>${esc(g.date)}</td><td>${fmtTime(g.time)}</td><td>${esc(g.facility)}</td><td class="link" onclick="selectTeam('${oppId || ''}')">${isHome ? 'vs ' : '@ '}${esc(opp)}</td><td class="num">${score}</td><td class="num">${sheet}</td></tr>`;
+        return `<tr><td>${esc(g.date)}</td><td>${fmtTime(g.time)}</td><td>${esc(g.facility)}</td><td ${oppId ? `class="link" role="button" tabindex="0" onclick="selectTeam('${oppId}')"` : ''}>${isHome ? 'vs ' : '@ '}${esc(opp)}</td><td class="num">${score}</td><td class="num">${sheet}</td></tr>`;
       }).join('');
       html += '</tbody></table>';
 
       // Full roster: position-grouped sections + goalies
       const roster = data.roster || { sections: [], goalies: [] };
       const totalPlayers = roster.sections.reduce((n, s) => n + s.players.length, 0) + roster.goalies.length;
-      html += `<h3 style="margin-top:18px">Full Roster${totalPlayers ? ` <span style="color:var(--muted);font-weight:600">${totalPlayers}</span>` : ''}</h3>`;
+      html += `<h3 class="section-h">Full Roster${totalPlayers ? ` <span style="color:var(--muted);font-weight:600">${totalPlayers}</span>` : ''}</h3>`;
 
       const rs = state.rosterSort;
       const skaterHead = '<table><thead><tr>'
@@ -1990,10 +2224,10 @@ const $main = document.getElementById('main');
       roster.sections.forEach(sec => {
         html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
         html += skaterHead + sortRows(sec.players, rs.key, rs.dir, SKATER_VAL).map(p => `
-          <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
+          <tr class="link roster-player" tabindex="0" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
-            <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td>
-            <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim}</td>
+            <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td><td class="num">${p.pts ?? '-'}</td>
+            <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim ?? '-'}</td>
           </tr>`).join('') + '</tbody></table>';
       });
 
@@ -2012,9 +2246,9 @@ const $main = document.getElementById('main');
           + sortTh('gaa', 'GAA', gs, 'goalies', true)
           + '</tr></thead><tbody>';
         html += sortRows(roster.goalies, gs.key, gs.dir, GOALIE_VAL).map(p => `
-          <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
+          <tr class="link roster-player" tabindex="0" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
-            <td class="num">${p.gp}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
+            <td class="num">${p.gp ?? '-'}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
             <td class="num">${p.gp ? Math.round((p.w / p.gp) * 100) + '%' : '-'}</td>
             <td class="num">${p.ga}</td><td class="num">${typeof p.gaa === 'number' ? p.gaa.toFixed(1) : p.gaa}</td>
           </tr>`).join('');
@@ -2029,7 +2263,7 @@ const $main = document.getElementById('main');
         hardFail = (err && err.name === 'AbortError') ? 'Team request timed out'
           : (err && err.message ? err.message : 'Failed to render team');
       } finally {
-        clearTimeout(wd8); clearTimeout(wd20);
+        disarm();
         if (hardFail) {
           const c = document.getElementById('teamContent');
           if (c) c.innerHTML = teamErrorHtml(teamId, hardFail);
@@ -2058,7 +2292,7 @@ const $main = document.getElementById('main');
     }
 
     function previousSessionsHtml(rows, empty) {
-      let html = '<h3 style="margin-top:18px">Previous sessions</h3>';
+      let html = '<h3 class="section-h">Previous sessions</h3>';
       if (!rows || !rows.length) {
         html += '<div class="empty-history">' + (empty || 'No previous sessions on ChillerStats for this team.') + '</div>';
         return html;
@@ -2123,7 +2357,7 @@ const $main = document.getElementById('main');
 
       if (state.playersLeague) {
         const data = await api(`/api/league/${state.playersLeague}`, refresh);
-        if (data.error) { setMainHtml(html + `<div class="error">${data.error}</div></div>`); return; }
+        if (data.error) { setMainHtml(html + `<div class="error">${esc(data.error)}</div></div>`); return; }
         html += leaderSection('Pts', data.leaders.points, 'value');
         html += leaderSection('G', data.leaders.goals, 'value');
         html += leaderSection('A', data.leaders.assists, 'value');
@@ -2134,7 +2368,7 @@ const $main = document.getElementById('main');
       }
 
       const data = await api('/api/leaders', refresh);
-      if (data.error) { setMainHtml(html + `<div class="error">${data.error}</div></div>`); return; }
+      if (data.error) { setMainHtml(html + `<div class="error">${esc(data.error)}</div></div>`); return; }
       html += leaderSection('Pts', data.points, 'points');
       html += leaderSection('G', data.goals, 'goals');
       html += leaderSection('A', data.assists, 'assists');
@@ -2160,7 +2394,7 @@ const $main = document.getElementById('main');
       $main.innerHTML = skeletonHtml(3);
       const path = token ? `/api/player-token/${encodeURIComponent(token)}` : `/api/player/${teamId}/${playerId}`;
       const data = await api(path);
-      if (data.error) { $main.innerHTML = `<div class="error">${data.error}</div>`; return; }
+      if (data.error) { $main.innerHTML = `<div class="error">${esc(data.error)}</div>`; return; }
 
       let html = `<div class="card"><h2>${esc(data.name)}</h2>`;
       if (data.history.length) {
@@ -2189,7 +2423,7 @@ const $main = document.getElementById('main');
           `<div class="stat-box"><div class="num">${totals.sog}</div><div class="label">Shots</div></div>` +
           '</div>';
 
-        html += '<h3 style="margin-top:18px">Season by Season</h3>';
+        html += '<h3 class="section-h">Season by Season</h3>';
       }
       html += '<table><thead><tr><th>Season</th><th>League</th><th>Team</th><th class="num">GP</th><th class="num">G</th><th class="num">A</th><th class="num">Pts</th><th class="num">P/GP</th><th class="num">ESG</th><th class="num">PPG</th><th class="num">SHG</th><th class="num">SOG</th><th class="num">PIM</th></tr></thead><tbody>';
       html += data.history.map(h => `
@@ -2250,12 +2484,20 @@ const $main = document.getElementById('main');
         return;
       }
 
-      const data = await api(`/api/league/${state.leagueId}`, refresh);
+      const $ana = $main;
+      $ana.innerHTML = skeletonHtml(4);
+      const disarmAna = armSkeletonWatchdog($ana, 'analytics', "loadActiveTab(true)");
+      let data;
+      try {
+        data = await api(`/api/league/${state.leagueId}`, refresh);
+      } finally {
+        disarmAna();
+      }
       await loadAnalyticsContent(data);
     }
 
     async function loadAnalyticsContent(data) {
-      if (!data || data.error) { $main.innerHTML = `<div class="error">${(data||{}).error || 'No data'}</div>`; return; }
+      if (!data || data.error) { $main.innerHTML = `<div class="error">${esc((data||{}).error || 'No data')}</div>`; return; }
 
       let html = `<div class="card"><h2>Analytics · ${data.league_name}</h2>`;
       html += changeLeagueHtml();
@@ -2319,7 +2561,7 @@ const $main = document.getElementById('main');
       // League leaders — kept, restyled with mono position chips
       const leaders = data.leaders || {};
       html += '<h3>Top Scorers</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
-      html += (leaders.points || []).map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td><span class="pos-chip${i === 0 ? ' pos-chip--1' : (i < 3 ? ' pos-chip--2' : '')}">${i + 1}</span><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
+      html += (leaders.points || []).map((p, i) => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"` : ''}><td><span class="pos-chip${i === 0 ? ' pos-chip--1' : (i < 3 ? ' pos-chip--2' : '')}">${i + 1}</span>${esc(p.name)}</td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
       html += '</tbody></table></div>';
 
       setMainHtml(html);
@@ -2351,7 +2593,13 @@ const $main = document.getElementById('main');
 
     // Public helpers for inline event handlers
     window.setTab = setTab;
-    window.loadTeamContent = (teamId, refresh) => loadTeamContent(teamId, !!refresh);
+    window.loadActiveTab = loadActiveTab;
+    // Direct binding — the original function declaration. NEVER write this as
+    // `window.loadTeamContent = (id, r) => loadTeamContent(id, !!r)`: this file
+    // has no IIFE, so the arrow's inner identifier resolves to the (just
+    // shadowed) global at call time = infinite recursion = "Maximum call stack
+    // size exceeded" and a dead Team tab for every saved-team visitor.
+    window.loadTeamContent = loadTeamContent;
     // Browsing a team (game rows, standings, compare) — does NOT change your saved team
     window.selectTeam = (teamId) => {
       if (!teamId) return;
@@ -2421,7 +2669,7 @@ const $main = document.getElementById('main');
     // Keyboard operability for pill/cell controls (Enter/Space activates)
     $main.addEventListener('keydown', e => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      const target = e.target.closest('[data-day], [data-lid], [data-sec], [data-session], [data-cal-day], [data-pl-all], [data-pl-day], [data-pl-lid], [data-change-league], [data-cal-today], [data-cal-prev], [data-cal-next], [data-level], th[data-sort], [data-showall]');
+      const target = e.target.closest('[data-day], [data-lid], [data-sec], [data-session], [data-cal-day], [data-pl-all], [data-pl-day], [data-pl-lid], [data-change-league], [data-cal-today], [data-cal-prev], [data-cal-next], [data-level], [data-pacemaker], .roster-player, td[role=button], th[data-sort], [data-showall]');
       if (target) {
         e.preventDefault();
         target.click();
@@ -2707,11 +2955,15 @@ const $main = document.getElementById('main');
           loadActiveTab(true);
         }, 30000);
       }
-      // Data stamp: "UPDATED HH:MM" — 24h-safe (no AM/PM, no "tonight").
+      // Data stamp: "UPDATED HH:MM" — 24h-safe, and it TICKS every minute so
+      // the footer can't claim a stale update time (R8: 4-round carry closed).
       const stampEl = document.getElementById('dataStamp');
       if (stampEl) {
-        const hhmm = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        stampEl.textContent = hhmm;
+        const paintStamp = () => {
+          stampEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        };
+        paintStamp();
+        setInterval(paintStamp, 60000);
       }
       // Hash deep-link restore: read the hash BEFORE setTab (setTab's
       // replaceState strips it when restoring the default 'today' tab).

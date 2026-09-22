@@ -1,0 +1,76 @@
+=== L1205-1235 full ===
+1205:   #app { max-width: 100% !important; height: auto !important; }
+1206:   main { padding: 0 !important; overflow: visible !important; }
+1207:   .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #bbb !important; background: #fff !important; }
+1208:   .game-card, .stat-box { box-shadow: none !important; border: 1px solid #ddd !important; }
+1209:   table { font-size: 11pt; display: table !important; overflow: visible !important; }
+1210:   th, td { color: #000 !important; }
+1211:   .link { color: #000 !important; text-decoration: underline; }
+1212:   .fade-in { animation: none !important; }
+1213: }
+1214: 
+1215: /* reduced motion */
+1216: @media (prefers-reduced-motion: reduce) {
+1217:   .sb-card[data-status="live"]::before, .sb-live::before, .live-dot, .live-dot-inline,
+1218:   .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }
+1219:   .skeleton::after, .skeleton-card::after { animation: none !important; }
+1220:   .sb-num.flash { animation: none !important; }
+1221:   *, *::before, *::after { transition-duration: 0.01ms !important; }
+1222: }
+1223: 
+1224: /* theme-icon visibility */
+1225: .theme-icon { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; }
+1226: html[data-theme="light"] .theme-icon-sun { display: none; }
+1227: html[data-theme="dark"] .theme-icon-moon { display: none; }
+1228: 
+1229: /* fade-in for tab content */
+1230: .fade-in { animation: fade-in 0.26s var(--ease) both; }
+1231: @keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+1232: 
+1233: /* ---------- MY-TEAM HERO: pride strip ---------- */
+1234: .hero-glow {
+1235:   position: relative;
+=== every line containing 'animation' in style.css ===
+  L260: animation: live-dot-pulse 1.4s ease-in-out infinite;
+  L362: animation: live-breathe 2.2s ease-in-out infinite;
+  L379: animation: live-dot-pulse 1.4s ease-in-out infinite;
+  L411: .sb-num.flash { animation: score-flash 0.9s var(--ease); }
+  L468: animation: live-dot-pulse 1.6s ease-in-out infinite;
+  L769: .pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }
+  L778: animation: pal-pop 0.15s var(--ease);
+  L834: animation: live-dot-pulse 1.4s ease-in-out infinite;
+  L870: animation: live-dot-pulse 1.6s ease-in-out infinite;
+  L945: animation: shimmer 1.4s infinite;
+  L953: animation: spin 0.8s linear infinite;
+  L1212: .fade-in { animation: none !important; }
+  L1218: .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }
+  L1219: .skeleton::after, .skeleton-card::after { animation: none !important; }
+  L1220: .sb-num.flash { animation: none !important; }
+  L1230: .fade-in { animation: fade-in 0.26s var(--ease) both; }
+  L1280: animation: hero-next-pulse 1.8s var(--ease) infinite;
+  L1297: .hero-glow::before { animation: none !important; }
+  L1298: .hero-next-dot { animation: none !important; }
+  L1310: .card, .sb-card { animation: rise-in 0.24s var(--ease) both; }
+  L1312: .sb-list > *:nth-child(2) { animation-delay: 0.04s; }
+  L1313: .sb-list > *:nth-child(3) { animation-delay: 0.08s; }
+  L1314: .sb-list > *:nth-child(4) { animation-delay: 0.12s; }
+  L1315: .sb-list > *:nth-child(5) { animation-delay: 0.16s; }
+  L1316: .sb-list > *:nth-child(n+6) { animation-delay: 0.16s; }
+  L1319: .fade-in { animation-duration: 0.12s; }
+  L1403: .card, .sb-card, .sb-list > *, .fade-in { animation: none !important; }
+  L1404: .sb-list > * { animation-delay: 0s !important; }
+  L1411: .card, .sb-card, .sb-list > * { animation: none !important; }
+  L1607: Static (no animation) so prefers-reduced-motion needs no guard.
+=== every line containing 'pal-ov' or '.pal ' or '.pal,' or '.pal{' ===
+  L762: .pal-ov {
+  L769: .pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }
+  L771: .pal {
+  L1218: .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }
+=== spinner selectors ===
+  L948: .spinner {
+  L1218: .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }
+=== count '@media' blocks and find ALL prefers-reduced-motion occurrences ===
+  L1216: @media (prefers-reduced-motion: reduce) {
+  L1296: @media (prefers-reduced-motion: reduce) {
+  L1402: @media (prefers-reduced-motion: reduce) {
+  L1607: Static (no animation) so prefers-reduced-motion needs no guard.

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#060d18">
+<title>CAHL — Neon-Rink · Tonight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   NEON-RINK — synthwave arcade night at the rink
+   Two accents only: neon cyan + magenta. Flat panels, no glass.
+   ============================================================ */
+:root{
+  --bg:#060d18;
+  --panel:#0a1220;
+  --panel-2:#0e1830;
+  --ink:#eef2f8;
+  --muted:#8fa3bd;
+  --faint:#4a5a72;
+  --cyan:#CE1126;
+  --magenta:#A2AAAD;
+  --hair:rgba(162,170,173,.16);
+  --hair-soft:rgba(139,135,163,.18);
+  --font-body:'Space Grotesk',system-ui,-apple-system,sans-serif;
+  --font-arcade:'Orbitron','Space Grotesk',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:15px;
+  line-height:1.45;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+::selection{background:rgba(206,17,38,.28)}
+
+/* ---------- ICE HORIZON (single gradient surface) ---------- */
+.horizon{
+  position:fixed;left:0;right:0;bottom:0;height:44vh;
+  z-index:0;pointer-events:none;overflow:hidden;
+  opacity:.5;
+}
+.horizon::before{ /* perspective grid */
+  content:"";position:absolute;inset:-120% -60% 0 -60%;
+  background-image:
+    linear-gradient(rgba(0,70,130,.4) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,70,130,.4) 1px,transparent 1px);
+  background-size:46px 46px;
+  transform:perspective(300px) rotateX(61deg);
+  transform-origin:50% 0;
+  animation:gridflow 2.6s linear infinite;
+}
+@keyframes gridflow{to{background-position:0 46px,0 0}}
+.horizon::after{ /* horizon line + fade-out toward page top */
+  content:"";position:absolute;inset:0;
+  background:
+    linear-gradient(180deg,transparent 0%,rgba(10,7,20,0) 20%,var(--bg) 96%),
+    linear-gradient(90deg,var(--bg) 0%,transparent 12%,transparent 88%,var(--bg) 100%);
+}
+.horizon-line{
+  position:fixed;left:0;right:0;bottom:44vh;height:1px;z-index:0;pointer-events:none;
+  background:var(--magenta);
+  box-shadow:0 0 14px 1px rgba(162,170,173,.65);
+  opacity:.5;
+}
+/* CRT scanlines + vignette, ~4% */
+.crt{
+  position:fixed;inset:0;z-index:40;pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 3px),
+    radial-gradient(120% 90% at 50% 45%,transparent 62%,rgba(2,0,10,.5) 100%);
+  opacity:.4;mix-blend-mode:overlay;
+}
+
+/* ---------- SHELL ---------- */
+.shell{position:relative;z-index:1;max-width:880px;margin:0 auto;padding:0 16px 72px}
+header.top{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:14px 0 10px;border-bottom:1px solid var(--hair-soft);
+}
+.wordmark{
+  font-family:var(--font-arcade);font-weight:800;font-size:17px;letter-spacing:.24em;
+  color:var(--ink);
+}
+.wordmark b{color:var(--cyan);text-shadow:0 0 10px rgba(206,17,38,.55)}
+.wordmark small{
+  display:block;font-family:var(--font-body);font-weight:500;font-size:9.5px;
+  letter-spacing:.34em;color:var(--muted);text-shadow:none;margin-top:2px;
+}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin-left:auto}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs a{
+  flex:none;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:4px;
+  border:1px solid transparent;transition:color .15s,border-color .15s;
+}
+nav.tabs a:hover{color:var(--cyan)}
+nav.tabs a[aria-current="page"]{color:var(--cyan);border-color:var(--hair)}
+.date-chip{
+  flex:none;font-family:var(--font-arcade);font-size:10px;font-weight:600;
+  letter-spacing:.22em;color:var(--muted);
+  border:1px solid var(--hair-soft);border-radius:3px;padding:6px 9px;
+}
+.date-chip b{color:var(--magenta);font-weight:600}
+
+/* ---------- TICKER ---------- */
+.ticker{
+  margin:10px 0 0;border:1px solid var(--hair-soft);border-radius:4px;
+  background:var(--panel);overflow:hidden;position:relative;
+}
+.ticker-track{display:flex;width:max-content;animation:tick 34s linear infinite}
+.ticker:hover .ticker-track{animation-play-state:paused}
+@keyframes tick{to{transform:translateX(-50%)}}
+.ticker-track span{
+  font-family:var(--font-arcade);font-size:10px;font-weight:600;letter-spacing:.18em;
+  color:var(--muted);padding:8px 0;white-space:nowrap;
+}
+.ticker-track span i{font-style:normal;color:var(--ink);padding:0 4px}
+.ticker-track span .live-t{color:var(--magenta)}
+.ticker-track span .fin-t{color:var(--cyan)}
+.ticker-track span::after{content:"◆";color:var(--faint);padding:0 14px}
+
+/* ---------- SECTION HEADS ---------- */
+.sec-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:30px 0 12px}
+.sec-head h1,.sec-head h2{
+  font-family:var(--font-arcade);font-weight:800;font-size:15px;letter-spacing:.26em;
+  text-transform:uppercase;
+}
+.sec-head h1 i{font-style:normal;color:var(--cyan)}
+.sec-head h2 i{font-style:normal;color:var(--magenta)}
+.sec-head .count{
+  font-family:var(--font-arcade);font-size:10px;font-weight:600;letter-spacing:.18em;
+  color:var(--faint);margin-left:auto;
+}
+.sec-head .count b{color:var(--ink);font-weight:600}
+
+/* ---------- CONTROLS ---------- */
+.controls{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:none;font-family:var(--font-body);font-size:10.5px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  background:var(--panel);border:1px solid var(--hair-soft);border-radius:3px;
+  padding:7px 11px;cursor:pointer;transition:color .15s,border-color .15s,box-shadow .15s;
+}
+.chip:hover{color:var(--cyan);border-color:var(--hair)}
+.chip[aria-pressed="true"]{
+  color:var(--bg);background:var(--cyan);border-color:var(--cyan);
+  box-shadow:0 0 12px rgba(206,17,38,.35);
+}
+.seg{
+  display:inline-flex;align-self:flex-start;border:1px solid var(--hair-soft);
+  border-radius:4px;overflow:hidden;background:var(--panel);
+}
+.seg button{
+  font-family:var(--font-arcade);font-size:10px;font-weight:600;letter-spacing:.2em;
+  color:var(--muted);background:transparent;border:0;padding:9px 14px;cursor:pointer;
+  transition:color .15s,background .15s;
+}
+.seg button+button{border-left:1px solid var(--hair-soft)}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{color:var(--cyan);background:rgba(206,17,38,.08)}
+.seg button[aria-pressed="true"].seg-live{color:var(--cyan);background:rgba(206,17,38,.1)}
+
+/* ---------- CABINET ROWS (perspective-flowing column) ---------- */
+ol.games{list-style:none;display:flex;flex-direction:column;gap:8px;position:relative}
+@media (min-width:700px){
+  ol.games{
+    transform:perspective(1400px) rotateX(1.6deg);
+    transform-origin:50% 0;
+  }
+  ol.games li:nth-child(n+13){opacity:.94}
+}
+.cab{
+  background:var(--panel);border:1px solid var(--hair-soft);border-radius:5px;
+  transition:border-color .18s,box-shadow .18s,transform .18s;
+}
+.cab-main{
+  width:100%;display:grid;grid-template-columns:74px 1fr auto;align-items:center;
+  gap:10px;background:transparent;border:0;color:inherit;text-align:left;
+  font:inherit;padding:11px 12px;cursor:pointer;
+}
+.cab:hover,.cab:focus-within{
+  border-color:rgba(206,17,38,.55);
+  box-shadow:0 0 0 1px rgba(206,17,38,.25),0 0 22px rgba(206,17,38,.14);
+}
+@media (min-width:700px){.cab:hover{transform:translateX(4px)}}
+.cab.is-live{
+  border-color:rgba(162,170,173,.5);
+  box-shadow:0 0 0 1px rgba(162,170,173,.22),0 0 22px rgba(162,170,173,.1);
+}
+.cab.is-live:hover,.cab.is-live:focus-within{
+  border-color:rgba(162,170,173,.85);
+  box-shadow:0 0 0 1px rgba(162,170,173,.4),0 0 26px rgba(162,170,173,.22);
+}
+.cab.final{background:var(--panel-2)}
+.cab.final .cab-main{cursor:default}
+
+.cab-when{
+  display:flex;flex-direction:column;gap:3px;align-items:flex-start;
+}
+.cab-time{
+  font-family:var(--font-arcade);font-size:10px;font-weight:600;letter-spacing:.14em;
+  color:var(--muted);
+}
+.badge-live{
+  font-family:var(--font-arcade);font-size:9px;font-weight:800;letter-spacing:.22em;
+  color:var(--magenta);animation:livepulse 1.6s ease-in-out infinite;
+}
+@keyframes livepulse{0%,100%{opacity:1}50%{opacity:.45}}
+.badge-final{
+  font-family:var(--font-arcade);font-size:9px;font-weight:800;letter-spacing:.22em;
+  color:var(--faint);
+}
+.clock{
+  font-family:var(--font-arcade);font-size:9.5px;font-weight:600;letter-spacing:.14em;
+  color:var(--cyan);
+}
+
+.cab-teams{display:flex;flex-direction:column;gap:5px;min-width:0}
+.trow{display:flex;align-items:center;gap:10px;min-width:0}
+.t-name{
+  font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  min-width:0;
+}
+.t-home{
+  flex:none;width:14px;height:14px;border:1px solid var(--hair-soft);border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:7.5px;font-weight:700;letter-spacing:.05em;color:var(--faint);
+}
+.t-score{
+  margin-left:auto;font-family:var(--font-arcade);font-weight:800;font-size:19px;
+  letter-spacing:.1em;color:var(--faint);font-variant-numeric:tabular-nums;min-width:34px;
+  text-align:right;flex:none;
+}
+.cab.is-live .t-score{
+  color:#fff;text-shadow:0 0 14px rgba(206,17,38,.65),0 0 3px rgba(206,17,38,.4);
+}
+.cab.is-live .t-score.lead{color:var(--cyan)}
+.cab.final .t-score{color:var(--muted)}
+.cab.final .t-score.win{color:var(--ink)}
+
+.cab-meta{
+  display:none;font-family:var(--font-arcade);font-size:9px;font-weight:600;
+  letter-spacing:.2em;color:var(--faint);text-align:right;flex:none;max-width:150px;
+}
+.cab-meta span{display:block;margin-bottom:4px}
+@media (min-width:700px){.cab-meta{display:block}}
+
+/* goal-log drawer */
+.cab-log{
+  display:none;border-top:1px dashed var(--hair-soft);
+  padding:10px 12px 12px;
+}
+.cab.open .cab-log{display:block}
+.cab:not(.final) .cab-main{cursor:pointer}
+.cab.final .cab-main{cursor:default}
+.log-title{
+  font-family:var(--font-arcade);font-size:9px;font-weight:600;letter-spacing:.24em;
+  color:var(--faint);margin-bottom:8px;
+}
+.log-row{
+  display:flex;gap:10px;font-size:12.5px;color:var(--muted);padding:3px 0;
+}
+.log-row b{color:var(--ink);font-weight:500}
+.log-row .lmag{color:var(--magenta)}
+.log-row .lcyan{color:var(--cyan)}
+.log-row .lt{font-family:var(--font-arcade);font-size:10px;letter-spacing:.1em;color:var(--faint);margin-left:auto;flex:none}
+
+/* hover blip — visual only, a small light that fires on hover */
+.blip{
+  position:absolute;left:-3px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;
+  background:var(--cyan);opacity:0;box-shadow:0 0 8px rgba(206,17,38,.9);
+}
+.cab{position:relative}
+.cab:hover .blip{animation:blipfire .45s ease-out 1}
+@keyframes blipfire{0%{opacity:1;transform:scale(1.8)}100%{opacity:0;transform:scale(.4)}}
+.cab.is-live:hover .blip{background:var(--cyan);box-shadow:0 0 8px rgba(206,17,38,.9)}
+
+/* ---------- LEADERS RAIL ---------- */
+.leaders{
+  border:1px solid var(--hair-soft);border-radius:5px;background:var(--panel);
+  display:flex;overflow-x:auto;scrollbar-width:none;
+}
+.leaders::-webkit-scrollbar{display:none}
+.ld{
+  flex:1 0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px;min-width:186px;
+}
+.ld+.ld{border-left:1px solid var(--hair-soft)}
+.ld-rank{
+  font-family:var(--font-arcade);font-weight:800;font-size:22px;color:var(--faint);
+  min-width:26px;text-align:center;
+}
+.ld:first-child .ld-rank{color:var(--cyan);text-shadow:0 0 12px rgba(206,17,38,.5)}
+.ld-body{min-width:0}
+.ld-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ld-team{font-size:10.5px;color:var(--muted);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ld-pts{
+  margin-left:auto;font-family:var(--font-arcade);font-weight:800;font-size:17px;
+  color:var(--magenta);text-shadow:0 0 12px rgba(162,170,173,.45);flex:none;
+}
+.ld-pts small{display:block;font-family:var(--font-body);font-weight:500;font-size:8px;letter-spacing:.24em;color:var(--faint);text-align:right;text-shadow:none}
+
+/* donkey note */
+.donkey{
+  margin-top:10px;font-size:11px;letter-spacing:.08em;color:var(--muted);
+  display:flex;gap:8px;align-items:center;
+}
+.donkey b{color:var(--cyan);font-weight:700;letter-spacing:.14em}
+.donkey .dot{width:5px;height:5px;border-radius:50%;background:var(--magenta);flex:none}
+
+footer{
+  margin-top:40px;padding-top:14px;border-top:1px solid var(--hair-soft);
+  display:flex;gap:12px;flex-wrap:wrap;
+  font-family:var(--font-arcade);font-size:9px;font-weight:600;letter-spacing:.24em;
+  color:var(--faint);
+}
+footer span i{font-style:normal;color:var(--muted)}
+
+.empty{
+  display:none;border:1px dashed var(--hair-soft);border-radius:5px;
+  padding:26px;text-align:center;font-family:var(--font-arcade);
+  font-size:10px;letter-spacing:.26em;color:var(--faint);
+}
+.empty.show{display:block}
+
+/* ---------- MOBILE (390 first-class) ---------- */
+@media (max-width:520px){
+  .horizon{height:30vh;opacity:.3}
+  .horizon-line{bottom:30vh;opacity:.3}
+  .horizon::before{background-size:36px 36px;transform:perspective(220px) rotateX(63deg)}
+  .shell{padding:0 12px 56px}
+  header.top{gap:10px}
+  .cab-main{grid-template-columns:58px 1fr;padding:11px 10px;gap:8px}
+  .t-score{font-size:17px}
+  .t-name{font-size:13.5px}
+  .ld{min-width:168px;padding:11px 12px}
+  .cab-meta{display:none}
+}
+
+/* ---------- REDUCED MOTION ---------- */
+@media (prefers-reduced-motion: reduce){
+  .horizon::before{animation:none}
+  .badge-live{animation:none;opacity:1}
+  .ticker-track{animation:none;width:auto}
+  .ticker-track span:nth-child(n+9){display:none}
+  .cab,.cab:hover,.cab:focus-within{transition:none;transform:none}
+  .cab:hover .blip{animation:none;opacity:0}
+  nav.tabs a,.chip,.seg button{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="horizon" aria-hidden="true"></div>
+<div class="horizon-line" aria-hidden="true"></div>
+<div class="crt" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <header class="top">
+    <div class="wordmark">CAHL<b>◆</b><small>NEON-RINK · CHILLER ADULT HOCKEY</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#" aria-current="page">Today</a>
+      <a href="#">League</a>
+      <a href="#">Team</a>
+      <a href="#">Players</a>
+      <a href="#">Analytics</a>
+    </nav>
+    <span class="date-chip">WED <b>SEP 2</b> · 15 GP</span>
+  </header>
+
+  <div class="ticker" aria-label="Score ticker" role="marquee">
+    <div class="ticker-track" id="tickerTrack"></div>
+  </div>
+
+  <main>
+    <section aria-labelledby="tonight-h">
+      <div class="sec-head">
+        <h1 id="tonight-h">TONIGHT <i>ON THE ICE</i></h1>
+        <span class="count" id="countOut"><b>15</b>/15 GAMES</span>
+      </div>
+
+      <div class="controls">
+        <div class="chips" id="leagueChips" role="group" aria-label="Filter by league"></div>
+        <div class="seg" id="statusSeg" role="group" aria-label="Filter by status">
+          <button data-status="all" aria-pressed="true">ALL</button>
+          <button data-status="live" class="seg-live" aria-pressed="false">● LIVE</button>
+          <button data-status="final" aria-pressed="false">FINAL</button>
+        </div>
+      </div>
+
+      <ol class="games" id="gamesList"></ol>
+      <div class="empty" id="emptyOut">NO CABINETS MATCH THIS FILTER</div>
+    </section>
+
+    <section aria-labelledby="leaders-h">
+      <div class="sec-head">
+        <h2 id="leaders-h">TONIGHT'S <i>LEADERS</i></h2>
+        <span class="count">POINTS · ALL LEAGUES</span>
+      </div>
+      <div class="leaders" id="leadersRail" role="list"></div>
+      <p class="donkey"><span class="dot" aria-hidden="true"></span><b>SWAMP DONKEYS</b> not on ice tonight — next game Fri 9:10 PM vs Ice Ohtopuses, Chiller North.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>CAHL<i> ◆ </i>MONITOR</span>
+    <span>CONCEPT<i> 10 — NEON-RINK</i></span>
+    <span>DATA<i> CHILLERSTATS</i></span>
+  </footer>
+
+</div>
+
+<script>
+/* ================= DATA — tonight's real slate ================= */
+const GAMES=[
+ {t:"8:40 PM", a:"Goalie Guacamole", h:"Cyclones", r:"Chiller Dublin", l:"B West A", s:"final", as:3, hs:5},
+ {t:"9:40 PM", a:"Triple D", h:"Parking Lot Beers", r:"OhioHealth Ice Haus", l:"B East", s:"upcoming"},
+ {t:"9:50 PM", a:"Dayton Fire", h:"Dayton Hawks", r:"NTPRD Chiller", l:"NTPRD D", s:"live", as:2, hs:2, per:"2ND", clock:494, log:[["Dayton Hawks","#17 R. Alvey","EVEN · 1ST","9:41"],["Dayton Fire","#8 T. Nguyen","PP · 1ST","4:12"],["Dayton Hawks","#11 M. Kowalski","EVEN · 2ND","14:02"],["Dayton Fire","#26 D. Reyes","EVEN · 2ND","11:27"]]},
+ {t:"9:50 PM", a:"Carlucci's Pizza Red", h:"C Black Pizza (Saucy)", r:"Chiller Dublin", l:"B West B", s:"upcoming"},
+ {t:"10:00 PM", a:"Brew Jackets", h:"Busch League", r:"Chiller Ice Works", l:"D East", s:"live", as:0, hs:1, per:"1ST", clock:751, log:[["Busch League","#9 C. Bramlett","EVEN · 1ST","5:58"]]},
+ {t:"10:00 PM", a:"Gang Green", h:"The Beer Barrel Boys", r:"Chiller Dublin", l:"C East", s:"upcoming"},
+ {t:"10:00 PM", a:"The Scorners", h:"Goose Eggs", r:"Chiller North", l:"C North", s:"upcoming"},
+ {t:"10:00 PM", a:"Vandelay Industries", h:"Whiskey Warriors", r:"Chiller North", l:"C East", s:"upcoming"},
+ {t:"10:05 PM", a:"Goodfellas", h:"Cyclops", r:"Chiller Easton", l:"B West B", s:"upcoming"},
+ {t:"10:30 PM", a:"The Chicken Selects", h:"Shakers Raw Dogs", r:"Chiller North", l:"D West A", s:"upcoming"},
+ {t:"10:30 PM", a:"T5P Hockey", h:"Bu-Hockkey BT5", r:"Chiller Easton", l:"B West A", s:"upcoming"},
+ {t:"10:50 PM", a:"Birdie Juicers", h:"Winking Lizard", r:"OhioHealth Ice Haus", l:"C North", s:"upcoming"},
+ {t:"11:00 PM", a:"The tip in", h:"Puck Buddies", r:"Chiller Dublin", l:"B East", s:"upcoming"},
+ {t:"11:10 PM", a:"The Wobbly Pirates", h:"Brewins", r:"Chiller North", l:"C West", s:"upcoming"},
+ {t:"11:10 PM", a:"Goal Train", h:"CockTails and Dreams", r:"Chiller Ice Works", l:"D West B", s:"upcoming"}
+];
+const LEADERS=[
+ {n:"William Vonderahe",tm:"Black and Tan",p:5},
+ {n:"Brandon Spickler",tm:"Hamilton Mustangs (Thu)",p:4},
+ {n:"Will Wuotila",tm:"Fluffers",p:4},
+ {n:"John Kemp",tm:"Black and Tan",p:3},
+ {n:"Matthew Brancaleone",tm:"Hamilton Mustangs (Thu)",p:2}
+];
+
+const REDUCED=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+let league="ALL", status="all";
+
+/* ---------- RENDER: cabinet rows ---------- */
+function scoreCell(g,side){
+  if(g.s==="upcoming") return '<span class="t-score">–</span>';
+  const v=side==="a"?g.as:g.hs;
+  const other=side==="a"?g.hs:g.as;
+  const win=v>other;
+  const cls=g.s==="live"?(win?"t-score lead":"t-score"):(win?"t-score win":"t-score");
+  return `<span class="${cls}">${v}</span>`;
+}
+function whenCell(g){
+  if(g.s==="live") return `<span class="badge-live">● LIVE</span><span class="clock" data-clock="${g.clock}" data-per="${g.per}">${g.per} · ${fmt(g.clock)}</span>`;
+  if(g.s==="final") return `<span class="badge-final">FINAL</span><span class="clock" style="color:var(--faint)">${g.t}</span>`;
+  return `<span class="cab-time">${g.t}</span>`;
+}
+const fmt=c=>`${Math.floor(c/60)}:${String(c%60).padStart(2,"0")}`;
+
+function render(){
+  const list=$("#gamesList");
+  const visible=GAMES.filter(g=>(league==="ALL"||g.l===league)&&(status==="all"||g.s===status));
+  list.innerHTML=visible.map((g)=>{
+    const i=GAMES.indexOf(g);
+    return `
+    <li class="cab ${g.s}" data-i="${i}">
+      <span class="blip" aria-hidden="true"></span>
+      <button class="cab-main" aria-expanded="false" ${g.s==="final"?'tabindex="-1"':""}>
+        <span class="cab-when">${whenCell(g)}</span>
+        <span class="cab-teams">
+          <span class="trow">${scoreCell(g,"a")}<span class="t-home" title="away">AW</span><span class="t-name">${esc(g.a)}</span></span>
+          <span class="trow">${scoreCell(g,"h")}<span class="t-home" style="border-color:var(--hair);color:var(--cyan)" title="home">HM</span><span class="t-name">${esc(g.h)}</span></span>
+        </span>
+        <span class="cab-meta"><span>${esc(g.l.toUpperCase())}</span><span>${esc(g.r.toUpperCase())}</span></span>
+      </button>
+      ${g.log?`<div class="cab-log"><div class="log-title">GOAL LOG</div>${g.log.map(l=>`<div class="log-row"><span class="lcyan">◆</span><b>${esc(l[0])}</b><span>${esc(l[1])}</span><span>${esc(l[2])}</span><span class="lt">${l[3]}</span></div>`).join("")}</div>`:""}
+    </li>`;
+  }).join("");
+  $("#countOut").innerHTML=`<b>${visible.length}</b>/${GAMES.length} GAMES`;
+  $("#emptyOut").classList.toggle("show",visible.length===0);
+
+  /* interactions on rows: expand goal log */
+  list.querySelectorAll(".cab:not(.final) .cab-main").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const li=btn.closest(".cab");
+      const open=li.classList.toggle("open");
+      btn.setAttribute("aria-expanded",open);
+    });
+  });
+}
+
+/* ---------- RENDER: chips + seg ---------- */
+const leagues=["ALL",...new Set(GAMES.map(g=>g.l))];
+$("#leagueChips").innerHTML=leagues.map(l=>`<button class="chip" data-l="${esc(l)}" aria-pressed="${l==="ALL"}">${esc(l==="ALL"?"ALL LEAGUES":l)}</button>`).join("");
+$("#leagueChips").addEventListener("click",e=>{
+  const b=e.target.closest(".chip"); if(!b) return;
+  league=b.dataset.l;
+  $("#leagueChips").querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",c===b));
+  render();
+});
+$("#statusSeg").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  status=b.dataset.status;
+  $("#statusSeg").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  render();
+});
+
+/* ---------- RENDER: ticker + leaders ---------- */
+const tickItems=GAMES.filter(g=>g.s!=="upcoming").map(g=>
+  `<span>${g.s==="live"?'<span class="live-t">●</span> ':''}${esc(g.a)} <i>${g.s==="upcoming"?"–":(g.s==="live"?g.as+"-"+g.hs:g.as+"-"+g.hs)}</i> ${esc(g.h)} <span class="${g.s==="live"?"live-t":"fin-t"}">${g.s==="live"?"LIVE "+g.per:"FINAL"}</span></span>`
+).join("");
+$("#tickerTrack").innerHTML=tickItems+(REDUCED?"":tickItems);
+
+$("#leadersRail").innerHTML=LEADERS.map((p,i)=>`
+  <div class="ld" role="listitem">
+    <span class="ld-rank">${String(i+1).padStart(2,"0")}</span>
+    <span class="ld-body"><span class="ld-name">${esc(p.n)}</span><span class="ld-team">${esc(p.tm)}</span></span>
+    <span class="ld-pts">${p.p}<small>PTS</small></span>
+  </div>`).join("");
+
+/* ---------- LIVE clock sim (off under reduced motion) ---------- */
+if(!REDUCED){
+  setInterval(()=>{
+    document.querySelectorAll(".clock[data-clock]").forEach(el=>{
+      let c=+el.dataset.clock-1;
+      if(c<0){c=1199; el.dataset.per=el.dataset.per==="1ST"?"2ND":"3RD";}
+      el.dataset.clock=c;
+      el.textContent=`${el.dataset.per} · ${fmt(c)}`;
+    });
+  },1000);
+}
+
+render();
+</script>
+</body>
+</html>

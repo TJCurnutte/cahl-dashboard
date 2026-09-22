@@ -1,0 +1,92 @@
+--- ../jury_r5/style_v55.css	2026-09-04 09:20:48
++++ style_v59.css	2026-09-04 12:35:28
+@@ -241,6 +241,9 @@
+   transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
+ }
+ .live-pill:focus-within { outline: 2px solid var(--union); outline-offset: 2px; }
++/* auto-refresh checked-state feedback (jury R5: invisible-but-functional control) */
++.live-pill:has(#autoToggle:checked) { color: var(--text-2); border-color: var(--border-strong); background: var(--panel-3); }
++.live-pill:has(#autoToggle:checked) .live-pill-dot { background: var(--win); }
+ .live-pill .live-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+ /* live: accent status */
+ body.has-live .live-pill {
+@@ -757,7 +760,8 @@
+ .pal-input-row svg { flex: 0 0 auto; stroke: var(--muted); }
+ .pal-input-row input {
+   flex: 1; height: 52px; padding: 0; border: none; border-radius: 0;
+-  background: transparent; margin: 0; font-size: 15px;
++  background: transparent; margin: 0;
++  font-size: 16px; /* >=16px prevents iOS focus auto-zoom (jury R5-2) */
+ }
+ .pal-input-row input:focus { box-shadow: none; border: none; outline: none; }
+ html[data-theme="light"] .pal-input-row input:focus { border: none; box-shadow: none; outline: none; }
+@@ -1634,6 +1638,69 @@
+ }
+ 
+ /* ============================================================
++   R6 — TODAY PAGE ENRICHMENT: night strip, scored strip, rink grouping
++   ============================================================ */
++.tonight-strip {
++  display: grid;
++  grid-template-columns: repeat(4, 1fr);
++  gap: 8px;
++  margin-bottom: 14px;
++}
++.tonight-kpi {
++  display: flex; flex-direction: column; align-items: center; justify-content: center;
++  padding: 12px 6px 10px;
++  background: linear-gradient(180deg, var(--panel-2), var(--panel));
++  border: 1px solid var(--border-soft);
++  border-radius: var(--radius-md);
++  min-width: 0;
++}
++.tonight-num {
++  font-family: var(--display);
++  font-size: 27px; font-weight: 700; line-height: 1;
++  color: var(--text);
++  font-variant-numeric: tabular-nums;
++}
++.tonight-kpi:nth-child(3) .tonight-num { color: var(--accent); }
++.tonight-time { font-size: 19px; letter-spacing: 0.02em; }
++.tonight-label {
++  font-family: var(--mono);
++  font-size: 8.5px; font-weight: 600;
++  text-transform: uppercase; letter-spacing: 0.14em;
++  color: var(--muted); margin-top: 5px;
++}
++.scored-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
++.scored-chip {
++  display: flex; flex-direction: column; gap: 3px;
++  padding: 10px 12px;
++  background: var(--inset);
++  border: 1px solid var(--border-soft);
++  border-radius: var(--radius-md);
++}
++.scored-teams {
++  font-family: var(--display); font-size: 14.5px; font-weight: 600;
++  letter-spacing: 0.02em; color: var(--text-2);
++  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
++}
++.scored-nums {
++  font-family: var(--display); font-size: 20px; font-weight: 700;
++  color: var(--accent); font-variant-numeric: tabular-nums;
++}
++.rink-head {
++  margin: 14px 0 6px;
++  font-family: var(--mono); font-size: 10px; font-weight: 600;
++  text-transform: uppercase; letter-spacing: 0.14em;
++  color: var(--union);
++}
++html[data-theme="light"] .rink-head { color: var(--union-deep); }
++@media (max-width: 599px) {
++  .tonight-strip { gap: 6px; }
++  .tonight-num { font-size: 22px; }
++  .tonight-time { font-size: 15px; }
++  .tonight-label { font-size: 7.5px; letter-spacing: 0.1em; }
++  .tonight-kpi { padding: 10px 4px 8px; }
++}
++
++/* ============================================================
+    FIX PASS R1-D — Analytics tab (jury round 1)
+    Root cause of 'Nomads0' fusion + empty GOAL DIFF hairline:
+    the .heat-*/.gd-* classes below had NO css — spans rendered

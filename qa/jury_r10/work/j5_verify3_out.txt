@@ -1,0 +1,41 @@
+=== A. exact ?v=70 static URLs (the ones the shell references) ===
+/static/js/app.js?v=70  0.94s status=200 bytes=157005 sha=61a31053d57e matches_plain=True
+/static/css/style.css?v=70  0.99s status=200 bytes=88845 sha=67fb387cb624 matches_plain=True
+/static/css/landing.css?v=70  0.81s status=200 bytes=8892 sha=dba0644868d3 matches_plain=True
+=== B. dead-team self-heal live probe ===
+/api/team/<dead-id>  4.08s status=HTTP Error 502: Bad Gateway body=None
+=== C. leagues + league payload ===
+/api/leagues  0.57s status=HTTP Error 404: Not Found bytes=0
+=== D. saved payload analysis ===
+/api/today: type=dict n_games=0
+  contains 'placeholder': False
+  contains 'TBD': False
+  contains 'null, null': False
+  contains 'undefined': False
+/api/teams: n=252
+  'Bye Week' present: 1 ['Bye Week']
+  'Team Blue' present: 1 ['Team Blue']
+  'Team Red' present: 1 ['Team Red']
+/api/leaders assists: n=5 player_id present=5/5
+/api/leaders goals: n=5 player_id present=5/5
+/api/leaders points: n=5 player_id present=5/5
+/api/players: type=dict n=5862 top_keys=['partial', 'players']
+  sample keys: ['a', 'g', 'ga', 'gaa', 'gp', 'jersey', 'l', 'league_id', 'league_name', 'name', 'otl', 'pim']
+=== E. WCAG on changed/new tokens ===
+  white on --union-hover #2b71c4 (changed): 4.93:1
+  white on --union-cta #1f6cb8: 5.39:1
+  sponsor-gold #b8925e on panel dark (approx #10151c): 6.38:1
+  light-theme gold #7a5c2e on #f5f2ec: 5.53:1
+=== F. OG/meta from shell ===
+  <meta name="description" content="CAHL Dashboard — live scores, league standings, team and player stats, and analytics for beer-league hockey." />
+  <meta property="og:title" content="CAHL Dashboard" />
+  <meta property="og:description" content="Live scores, standings, rosters, and all-time player stats for Chiller Adult Hockey League." />
+  <meta property="og:image" content="https://cahl.neural-forge.io/static/img/cahl-icon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta name="twitter:description" content="Live scores, standings, rosters, and all-time player stats for Chiller Adult Hockey League." />
+=== G. RM coverage: keyframes vs RM blocks ===
+  keyframes: ['live-breathe', 'live-dot-pulse', 'score-flash', 'pal-fade', 'pal-pop', 'shimmer', 'spin', 'fade-in', 'hero-next-pulse', 'rise-in']
+  RM block line-ranges: [(1216, 1222), (1296, 1299), (1402, 1406), (1607, 1608)]
+  keyframes named inside RM blocks: ['fade-in', 'spin']
+  NOT named in any RM block: ['hero-next-pulse', 'live-breathe', 'live-dot-pulse', 'pal-fade', 'pal-pop', 'rise-in', 'score-flash', 'shimmer']

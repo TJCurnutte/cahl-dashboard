@@ -1,0 +1,32 @@
+# CAHL UI/UX JURY — R5, Juror 3/5 — VISUAL CRAFT lens (v55)
+
+- Method: Chrome-free static audit of deployed bytes — `/static/css/style.css?v=55` (82,751 B), `/static/js/app.js?v=55`, `/` (index), fetched 2026-09-04.
+- v55 delta vs v54 (unified diff vs saved `qa/r4_juror2_style.css`, byte-equal chain to deployed v54): **exactly one CSS hunk** — the ≤430px 44px hit-floor fix (min-height/min-width 44 on `#kpalBtn`/`.live-pill`/`#themeToggle`/`#refreshBtn`, padding-only squeeze) + `-webkit-tap-highlight-color: transparent` parity with `:active` opacity feedback. JS and index unchanged in craft scope.
+- Score lineage: 7.8 (R2) → 8.1 (R3) → 8.5 (R4) → **8.7 (R5)**. The R4 pass earned its lift; the predicted token-work ceiling was not cashed — zero type-scale changes shipped in v55.
+
+## Dimension scores
+
+| # | Dimension | Evidence (v55 bytes) | Score |
+|---|---|---|---|
+| 1 | Visual identity | Rink-lines hero watermark verified at source (L1586–1634): red center line ±1.5px @ α.10, two blue lines @ 25/75% α.11, goal lines @ α.08, 180px center ring with inset 30px + outer 44px halo, light theme re-tuned to navy `rgba(0,38,84,*)`, mobile ring shrink 130px, `overflow:hidden` clip on `.hero-card`, pointer-events none, static (reduced-motion safe by construction). Watermark + `.team-watermark` Saira 800 + broadcast-bug brand stack = genuinely recognizable as rink-broadcast product. | 8.8 |
+| 2 | Typographic system | Saira 800 real usage confirmed: `.brand-text` (22px), `.team-watermark`, `.lead-pts` (L1332/1348). BUT the mono scale is still 6 hard sizes (8/9/9.5/10/10.5/11/11.5px) + 17 inherit rules; `--mono-md` remains a dead token (defined, 0 uses). All R4-named stragglers persist byte-identical: `.heat-val` 12px, `.heat-name` 13px, `.gd-empty` 13px, `.sb-name` 19px base + 20px @media, `.t-home/.t-away` 16.5px→17px, `header h1` 17px vs `.brand-text` 22px, `.tl-game.otl` 8px. Whole-file census: **28 distinct px font sizes, zero scale tokens** — a 4th append overlay was again chosen over editing original rule bodies. | 7.8 |
+| 3 | Color system | One accent discipline holds: Goal Red var(--accent) 30 uses, all in live/interactive/lead contexts (live-pill, status-live, sb-num live, mine-game, win-totals, brand mark); CBJ Union Blue is the structural hue. WCAG recompute on v55 tokens: text-2/panel 11.47:1, muted/panel 5.97:1, faint/panel 3.35:1 (large/uppercase mono only), **accent/bg 4.47:1 — a hair under AA-4.5 for small red text** (e.g. live-pill 9.5px labels); `#ef3d54` hits 5.13:1 at near-identical hue. Tint-stacked surfaces + `color-mix` zebra (40% panel-2) is disciplined craft. | 8.7 |
+| 4 | Layout & hierarchy | Marquee (sb-num 30px, cmp-h2h 34px) vs long-tail (9.5px mono labels) is a real 3.5× hierarchy. The 11-track desktop today-cols-head with calc() label placement (L1958–1980) is width-stable engineering; zebra + universal row hover (L488) + sticky table headers. Only rough edge: `grid-template-areas` juggling in 3 tiers of media queries. | 8.8 |
+| 5 | Density & data presentation | Sticky thead (2), zebra with explicit even:hover precedence (L1938–1947), `tabular-nums` on 18 numeral rules, stable column grid — no jiggle. Table → card fallback at <900px (L494). Print stylesheet present. | 8.7 |
+| 6 | Interaction & micro-feedback | :active opacity feedback on nav/rows (L1887), form focus rings, skip-link, palette focus management, score-flash JS wiring (add/remove `.flash`, 950ms). Hover-only table reveal has no :focus-visible equivalent for keyboard parity on `tbody tr` — minor. | 8.9 |
+| 7 | Motion design | 11 keyframes, every one purposeful: live-dot-pulse ×5 surfaces, live-breathe, score-flash, skeleton shimmer/spin, pal-fade/pop, rise-in stagger (0.04s steps, capped at n+6), hero-glow-breathe + next-pulse. Zero decorative loops. Three reduced-motion blocks kill every animation + transitions (L1189–95, 1273–76, 1379–83). | 9.0 |
+| 8 | Depth & material | Luminance stack bg→panel-3 is clean; **exactly 1 backdrop-filter (blur 3px) in the whole sheet** — no blur soup; 31 shadows from ~6 token families, accent glows only on live elements; hairline system border/-soft/-strong; no fake drop shadows on flat cards. Best-in-score dimension. | 9.1 |
+| 9 | Consistency & component quality | Chip/pill family is nearly one system (status-chip, form-chip, streak-badge, pos-chip, live-pill, elim share radius-999 + dim-bg + 1px-border anatomy; focus-visible rings centralized L1368). Held back by the type-scale scatter leaking across components (every mono label picks its own px) and `--mono-sm/--mono-xs` used in only 5 places total. | 8.2 |
+| 10 | Mobile ergonomics | v55 fixes verified in bytes: 44px hit floors at ≤430 via padding/typography-only squeeze (R4-2 regression class finally dead), tap-highlight parity, stacked today-rows <480, palette text hidden <600, 130px watermark shrink, viewport-fit=cover + pre-paint theme script (no FOUC), print/pwa meta complete. | 8.8 |
+
+**WEIGHTED TOTAL: 8.7/10** (identity 1.056 + type 0.936 + color 0.870 + layout 1.056 + density 1.044 + interaction 0.890 + motion 0.720 + depth 0.728 + consistency 0.656 + mobile 0.704 = 8.660)
+
+## The 3 cheapest fixes that would raise the score most
+
+1. **Edit the original mono rule bodies — retire the overlay pattern** (~1h): replace the 6 hard mono px sizes + the 17 bare `font-family: var(--mono)` inherits with the 3 existing tokens (`--mono-xs/-sm/-md`, fixing `--mono-md`'s dead status), and normalize the 8 named stragglers (heat-val 12→11, heat-name/gd-empty 13→12.5, sb-name 19/20→var, t-home/away 16.5→17→var, tl-game.otl 8→9px). **Delta: +0.35** (type 7.8→8.6, consistency 8.2→8.8). This is the 4th round being told the same thing — edit originals, don't append.
+2. **Lift dark-theme Goal Red to AA** (~5min): `--accent: #e8253c` → `#ef3d54` (5.13:1 on bg, 4.80:1 on panel). Hue-identical, one token, fixes every small red label at once. **Delta: +0.15** (color 8.7→9.0; also un-blocks identity/consistency at the margin).
+3. **Keyboard parity for row hover** (~20min): add `tbody tr:focus-visible` (and `tr.link`) to the same `background: var(--panel-2)` treatment as `:hover`, with the standard union outline. **Delta: +0.10** (interaction 8.9→9.1).
+
+Combined realistic ceiling for R6 if all three land: **~9.2/10**. The 9.7 gate remains blocked primarily by the type-scale debt, which is now the single largest weighted deficit on the panel.
+
+VERDICT: 8.7/10

@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#041c30">
+<title>CAHL Varsity — Game Day</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Graduate&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,600&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CAHL VARSITY — concept 09
+   Collegiate letterman athletics: felt background, chenille
+   badges, pinstripes, pennants, split-flap scoreboard.
+   Light-on-felt, warm, tactile. No glassmorphism.
+   ============================================================ */
+:root{
+  --felt:#06263f;
+  --felt-2:#0a3050;
+  --felt-3:#041c30;
+  --cream:#f3ead3;
+  --cream-2:#ece1c4;
+  --paper:#f7f0de;
+  --ink:#131922;
+  --ink-2:#3d4a5c;
+  --ink-3:#6b7a8d;
+  --gold:#CE1126;
+  --gold-2:#A2AAAD;
+  --maroon:#8f1420;
+  --maroon-2:#a8212f;
+  --line:#c9d2de;
+  --line-2:#aeb9c8;
+  --stitch:rgba(19,25,34,.35);
+  --shadow:0 1px 0 rgba(255,255,255,.06), 0 12px 30px rgba(0,0,0,.35);
+  --radius:10px;
+  --serif:'Playfair Display', Georgia, 'Times New Roman', serif;
+  --block:'Graduate', 'Arial Black', sans-serif;
+  --cond:'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --sans:'Barlow', -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:var(--sans);
+  background-color:var(--felt);
+  background-image:
+    radial-gradient(1100px 620px at 50% -12%, rgba(0,60,120,.30), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 1px, transparent 1px 3px);
+  background-attachment:fixed;
+  color:var(--cream);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--gold);color:#ffffff;}
+a{color:#002654;}
+button{font:inherit;}
+
+/* ================= MASTHEAD ================= */
+.masthead{
+  position:sticky;top:0;z-index:50;
+  background:var(--felt-3);
+  border-bottom:3px double var(--gold);
+  box-shadow:0 6px 24px rgba(0,0,0,.4);
+}
+.mast-inner{max-width:1180px;margin:0 auto;padding:10px 16px 8px;display:flex;align-items:center;gap:12px;}
+.crest{
+  flex:none;width:46px;height:46px;border-radius:50%;
+  border:3px solid var(--gold);outline:1px solid rgba(0,0,0,.5);outline-offset:2px;
+  background:radial-gradient(circle at 32% 28%, #0d3355, var(--felt-2) 72%);
+  color:var(--gold-2);font-family:var(--block);font-size:15px;letter-spacing:1px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 2px 6px rgba(255,255,255,.14), inset 0 -4px 8px rgba(0,0,0,.45);
+}
+.brand{line-height:1;min-width:0;}
+.brand .t{font-family:var(--serif);font-weight:900;font-size:21px;letter-spacing:.5px;white-space:nowrap;}
+.brand .t em{color:var(--gold-2);}
+.brand .s{font-family:var(--cond);font-size:11px;letter-spacing:2.2px;color:var(--gold);text-transform:uppercase;margin-top:4px;white-space:nowrap;}
+.mast-clock{margin-left:auto;text-align:right;flex:none;}
+.mast-clock .d{font-family:var(--cond);font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:#a4b3c6;}
+.mast-clock .t{font-family:var(--block);font-size:12.5px;color:var(--cream);margin-top:3px;}
+.nav{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;max-width:1180px;margin:0 auto;padding:0 12px 8px;}
+.nav::-webkit-scrollbar{display:none;}
+.nav a{
+  font-family:var(--cond);text-transform:uppercase;letter-spacing:1.6px;font-size:12.5px;
+  color:#c3cedd;text-decoration:none;padding:6px 11px;border-radius:6px;white-space:nowrap;
+}
+.nav a:hover{color:#fff;background:rgba(255,255,255,.07);}
+.nav a.active{color:var(--felt-3);background:var(--gold);font-weight:700;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);}
+
+/* ================= PENNANT RAIL ================= */
+.pennant-rail{
+  max-width:1180px;margin:0 auto;padding:16px 16px 0;
+  display:flex;gap:26px;overflow-x:auto;scrollbar-width:none;align-items:flex-start;
+}
+.pennant-rail::-webkit-scrollbar{display:none;}
+.pennant{position:relative;flex:none;background:none;border:none;cursor:pointer;padding:0;text-align:left;-webkit-tap-highlight-color:transparent;}
+.pennant .flag{
+  position:relative;display:flex;align-items:center;justify-content:center;gap:6px;
+  width:106px;height:34px;padding:0 12px 10px;
+  background:var(--cream);color:var(--ink);
+  clip-path:polygon(0 0, 100% 0, 100% 66%, 92% 100%, 50% 74%, 8% 100%, 0 66%);
+  font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:1.1px;text-transform:uppercase;white-space:nowrap;
+  box-shadow:0 3px 8px rgba(0,0,0,.35);
+  transform-origin:50% 0;
+  transition:transform .18s ease;
+}
+.pennant .flag::after{
+  content:"";position:absolute;inset:0;clip-path:inherit;
+  border-bottom:2px dashed var(--stitch);
+  box-shadow:inset 0 0 0 1px rgba(19,25,34,.14);
+  pointer-events:none;
+}
+.pennant .flag .dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--maroon);}
+.pennant .flag .dot.live-dot{background:var(--gold);}
+.pennant:hover .flag{transform:rotate(-1.6deg) translateY(1px);}
+.pennant.active .flag{background:var(--maroon);color:var(--cream);}
+.pennant.active .flag .dot{background:var(--gold-2);}
+.pennant .count{display:block;text-align:center;margin-top:6px;font-family:var(--block);font-size:10.5px;color:var(--gold);letter-spacing:1px;}
+@keyframes sway{0%,100%{transform:rotate(0deg);}50%{transform:rotate(1.7deg);}}
+.pennant .flag{animation:sway 5.4s ease-in-out infinite;}
+.pennant:nth-child(2n) .flag{animation-duration:6.6s;animation-delay:-1.9s;}
+.pennant:nth-child(3n) .flag{animation-duration:7.3s;animation-delay:-3.6s;}
+.pennant:hover .flag,
+.pennant:focus-visible .flag{animation-play-state:paused;}
+
+/* ================= LAYOUT ================= */
+main{max-width:1180px;margin:0 auto;padding:4px 16px 90px;}
+.home-grid{display:block;}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin:24px 2px 12px;flex-wrap:wrap;}
+.sec-head h2{
+  font-family:var(--serif);font-weight:900;font-size:clamp(22px,4.5vw,29px);color:var(--cream);
+  display:flex;align-items:center;gap:11px;
+}
+.sec-head h2 .bul{flex:none;width:9px;height:9px;background:var(--gold);transform:rotate(45deg);}
+.sec-head .sub{font-family:var(--cond);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#93a5ba;}
+.sec-head .rule{flex:1;border-top:3px double rgba(201,162,39,.55);min-width:36px;align-self:center;}
+
+/* ================= TOOLBAR ================= */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 2px 12px;}
+.tgl{
+  font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:1.6px;text-transform:uppercase;
+  background:rgba(243,234,211,.08);color:#b3c0d1;border:1px solid rgba(243,234,211,.28);
+  padding:7px 13px;border-radius:99px;cursor:pointer;transition:background .12s,color .12s;
+}
+.tgl:hover{background:rgba(243,234,211,.17);}
+.tgl.active{background:var(--gold);color:var(--ink);border-color:var(--gold);}
+.tgl.live.on{background:var(--maroon-2);color:var(--cream);border-color:var(--maroon);}
+.count-note{font-family:var(--cond);font-size:11.5px;letter-spacing:1.5px;text-transform:uppercase;color:#8fa3bd;margin-left:auto;}
+
+/* ================= GAME ROWS (game-day program) ================= */
+.schedule{display:flex;flex-direction:column;gap:8px;}
+.g-row{
+  background:var(--cream);color:var(--ink);
+  border-radius:var(--radius);overflow:hidden;
+  border:1px solid rgba(0,0,0,.35);
+  box-shadow:var(--shadow);
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.g-row:hover{transform:translateY(-1px);box-shadow:0 4px 0 rgba(0,0,0,.3), 0 16px 34px rgba(0,0,0,.42);}
+.g-row.live{outline:3px solid var(--gold);outline-offset:-3px;}
+.g-row.final{opacity:.88;}
+.g-row[hidden]{display:none;}
+.g-main{
+  display:grid;grid-template-columns:56px minmax(0,1fr) auto;
+  gap:2px 12px;align-items:center;align-content:center;
+  width:100%;text-align:left;background:none;border:none;color:inherit;cursor:pointer;
+  padding:10px 12px;
+}
+.g-time{
+  font-family:var(--block);font-size:11px;letter-spacing:.4px;color:var(--ink-2);
+  text-align:center;line-height:1.3;
+}
+.g-time .ampm{display:block;font-size:9px;letter-spacing:2px;color:var(--ink-3);}
+.g-teams{min-width:0;display:grid;gap:3px;}
+.g-team{display:flex;align-items:center;gap:9px;min-width:0;}
+.badge{
+  flex:none;width:29px;height:29px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--block);font-size:11px;color:var(--cream);
+  border:2px solid var(--cream);
+  box-shadow:0 0 0 1.5px var(--ink), inset 0 -3px 5px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.28), 0 2px 4px rgba(0,0,0,.3);
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+.g-row:hover .badge{
+  transform:translateY(-1px) scale(1.06);
+  box-shadow:0 0 0 1.5px var(--ink), inset 0 -2px 3px rgba(0,0,0,.22), inset 0 2px 4px rgba(255,255,255,.42), 0 4px 9px rgba(0,0,0,.35);
+}
+.g-team .nm{
+  font-family:var(--cond);font-weight:600;font-size:16.5px;letter-spacing:.3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.g-team .nm.win{font-weight:700;}
+.g-team .nm.lose{color:var(--ink-3);}
+.g-team .seed{font-family:var(--cond);font-size:10.5px;color:var(--ink-3);letter-spacing:1px;margin-left:auto;padding-left:6px;}
+.score-wrap{display:flex;align-items:center;gap:7px;justify-self:end;}
+.pill{
+  font-family:var(--cond);font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  padding:3px 8px;border-radius:99px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+}
+.pill.live{background:var(--maroon);color:var(--cream);}
+.pill.live .pulse{width:6px;height:6px;border-radius:50%;background:var(--gold-2);animation:pulse 1.4s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.7);}}
+.pill.final{background:var(--ink-2);color:var(--cream);}
+.pill.sched{background:rgba(19,25,34,.08);color:var(--ink-2);border:1px solid var(--line-2);}
+.chev{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(19,25,34,.08);color:var(--ink-2);font-size:11px;
+  transition:transform .2s ease;
+}
+.g-row.open .chev{transform:rotate(180deg);}
+.g-row .venue{
+  grid-column:2;
+  font-family:var(--cond);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);
+}
+
+/* ---------- split-flap score ---------- */
+.flip{display:inline-flex;gap:2px;font-family:var(--block);}
+.flip-digit{
+  position:relative;width:23px;height:33px;border-radius:4px;overflow:hidden;
+  background:#10151d;color:var(--gold-2);
+  box-shadow:inset 0 0 0 1px #2b3644, inset 0 1px 0 rgba(255,255,255,.14), 0 2px 4px rgba(0,0,0,.35);
+  perspective:220px;
+}
+.flip-digit .stat{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.flip-digit .stat::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.7);}
+.flip-digit .stat::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.05);}
+.flip-digit .f-top{
+  position:absolute;left:0;right:0;top:0;height:50%;overflow:hidden;
+  background:#10151d;transform-origin:bottom;pointer-events:none;
+  display:flex;justify-content:center;align-items:flex-start;
+}
+.flip-digit .f-top span{display:block;width:100%;text-align:center;font-size:18px;line-height:33px;}
+.flip-digit .f-top.flipping{animation:flipTop .3s ease-in forwards;}
+@keyframes flipTop{to{transform:rotateX(-90deg);}}
+.flip-digit .f-new{
+  position:absolute;left:0;right:0;bottom:0;height:50%;overflow:hidden;
+  transform-origin:top;transform:rotateX(90deg);pointer-events:none;
+  display:flex;justify-content:center;align-items:flex-end;
+}
+.flip-digit .f-new span{display:block;width:100%;text-align:center;font-size:18px;line-height:33px;margin-top:-33px;}
+.flip-digit .f-new.flipping{animation:flipNew .3s ease-out .29s forwards;}
+@keyframes flipNew{to{transform:rotateX(0deg);}}
+
+/* ---------- expanded detail (pinstripe program sheet) ---------- */
+.g-detail{
+  border-top:2px dashed var(--line-2);
+  background:repeating-linear-gradient(90deg, rgba(19,25,34,.045) 0 1px, transparent 1px 7px), var(--paper);
+  padding:13px 14px 15px;display:grid;gap:11px;
+}
+.g-detail[hidden]{display:none;}
+.d-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;}
+.d-col h4{
+  font-family:var(--cond);font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--maroon);
+  border-bottom:2px solid var(--maroon);padding-bottom:4px;margin-bottom:5px;
+}
+.d-col table{width:100%;border-collapse:collapse;font-size:13px;}
+.d-col td{padding:3px 0;border-bottom:1px dotted var(--line-2);}
+.d-col td:last-child{text-align:right;font-family:var(--block);font-size:11.5px;}
+.d-note{font-size:12.5px;color:var(--ink-2);font-style:italic;}
+.d-note b{font-style:normal;}
+
+/* ================= LEADERS ================= */
+.leaders{background:var(--cream);color:var(--ink);border-radius:var(--radius);border:1px solid rgba(0,0,0,.35);box-shadow:var(--shadow);overflow:hidden;}
+.ldr-head{display:flex;align-items:center;gap:10px;background:var(--ink);color:var(--cream);padding:10px 14px;flex-wrap:wrap;}
+.ldr-head .ttl{font-family:var(--serif);font-weight:800;font-size:15.5px;}
+.ldr-head .chips{margin-left:auto;display:flex;gap:6px;}
+.chip{
+  font-family:var(--cond);font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
+  background:none;border:1px solid rgba(243,234,211,.4);color:#b3c0d1;border-radius:99px;
+  padding:3px 10px;cursor:pointer;transition:background .12s,color .12s;
+}
+.chip:hover{border-color:var(--gold-2);color:var(--gold-2);}
+.chip.active{background:var(--gold);border-color:var(--gold);color:var(--ink);font-weight:700;}
+.ldr-table{width:100%;border-collapse:collapse;}
+.ldr-table th{
+  font-family:var(--cond);font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:var(--ink-3);
+  text-align:left;padding:9px 12px 5px;border-bottom:2px solid var(--ink);
+}
+.ldr-table th.num,.ldr-table td.num{text-align:right;}
+.ldr-table td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle;}
+.ldr-table tbody tr:last-child td{border-bottom:none;}
+.ldr-table tbody tr{transition:background .12s;}
+.ldr-table tbody tr:hover{background:var(--cream-2);}
+.ldr-table .rk{font-family:var(--block);font-size:11.5px;color:var(--maroon);width:30px;}
+.ldr-table .pnm{font-family:var(--cond);font-weight:600;font-size:15px;white-space:nowrap;}
+.ldr-table .ptm{display:block;font-size:11px;color:var(--ink-3);letter-spacing:.5px;margin-top:1px;}
+.ldr-table .val{font-family:var(--block);font-size:14.5px;}
+.ldr-table tr:first-child .val{color:var(--maroon);}
+.ldr-table td.num .sub{display:block;font-family:var(--cond);font-size:10px;color:var(--ink-3);letter-spacing:.8px;margin-top:1px;}
+
+/* ================= EMPTY / FOOTER ================= */
+.empty-note{
+  background:rgba(243,234,211,.07);border:1px dashed rgba(243,234,211,.3);
+  color:#cdd8c6;padding:18px;text-align:center;border-radius:var(--radius);
+  font-family:var(--cond);letter-spacing:1.5px;text-transform:uppercase;font-size:13px;
+}
+footer{border-top:3px double var(--gold);background:var(--felt-3);padding:18px 16px 26px;text-align:center;margin-top:30px;}
+footer .f1{font-family:var(--serif);font-weight:800;color:var(--cream);font-size:15px;}
+footer .f2{font-family:var(--cond);font-size:10.5px;letter-spacing:2.2px;text-transform:uppercase;color:#7f93ab;margin-top:5px;}
+
+/* ================= RESPONSIVE ================= */
+@media (min-width:720px){
+  .mast-inner{padding:12px 24px 8px;}
+  .nav{padding:0 18px 9px;}
+  .pennant-rail{padding:18px 24px 0;}
+  main{padding:4px 24px 90px;}
+  .g-main{grid-template-columns:76px minmax(0,1fr) auto;padding:12px 18px;gap:2px 16px;}
+  .g-team .nm{font-size:18px;}
+  .pennant .flag{width:118px;}
+  .schedule{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .g-row.live{grid-column:1 / -1;}
+  .leaders .ldr-table th,.leaders .ldr-table td{padding:10px 14px;}
+}
+@media (min-width:1020px){
+  .home-grid{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:26px;align-items:start;}
+  .home-side{position:sticky;top:96px;}
+  .leaders .ldr-table th,.leaders .ldr-table td{padding:11px 16px;}
+}
+@media (max-width:400px){
+  .flip-digit{width:21px;height:29px;}
+  .flip-digit .stat,.flip-digit .f-top span,.flip-digit .f-new span{font-size:16px;line-height:29px;}
+  .flip-digit .f-new span{margin-top:-29px;}
+  .g-main{padding:9px 10px;gap:2px 9px;grid-template-columns:50px minmax(0,1fr) auto;}
+  .g-team{gap:7px;}
+  .g-team .nm{font-size:14.5px;}
+  .badge{width:25px;height:25px;font-size:9.5px;}
+  .brand .t{font-size:18px;}
+  .brand .s{font-size:10px;letter-spacing:1.6px;}
+  .mast-clock{display:none;}
+  .pennant .flag{width:96px;font-size:11px;}
+  .ldr-table .pnm{font-size:14px;}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="mast-inner">
+    <div class="crest" aria-hidden="true">CA</div>
+    <div class="brand">
+      <div class="t">CAHL <em>Varsity</em></div>
+      <div class="s">Chiller Adult Hockey League</div>
+    </div>
+    <div class="mast-clock">
+      <div class="d">Wednesday · Game Day</div>
+      <div class="t">15 Games · 6 Rinks</div>
+    </div>
+  </div>
+  <nav class="nav" aria-label="Primary">
+    <a href="#" class="active">Today</a>
+    <a href="#">League</a>
+    <a href="#">Team</a>
+    <a href="#">Players</a>
+    <a href="#">Analytics</a>
+  </nav>
+</header>
+
+<div class="pennant-rail" role="tablist" aria-label="Filter games by division">
+  <button class="pennant active" data-div="all" role="tab" aria-selected="true">
+    <span class="flag"><span class="dot"></span>All Divisions</span>
+    <span class="count">15 games</span>
+  </button>
+  <button class="pennant" data-div="B" role="tab" aria-selected="false">
+    <span class="flag"><span class="dot"></span>Division B</span>
+    <span class="count">5 games</span>
+  </button>
+  <button class="pennant" data-div="C" role="tab" aria-selected="false">
+    <span class="flag"><span class="dot"></span>Division C</span>
+    <span class="count">6 games</span>
+  </button>
+  <button class="pennant" data-div="D" role="tab" aria-selected="false">
+    <span class="flag"><span class="dot"></span>Division D</span>
+    <span class="count">3 games</span>
+  </button>
+  <button class="pennant" data-div="W" role="tab" aria-selected="false">
+    <span class="flag"><span class="dot"></span>Women's</span>
+    <span class="count">1 game</span>
+  </button>
+</div>
+
+<main>
+  <div class="home-grid">
+    <div class="home-main">
+
+      <div class="sec-head">
+        <h2><span class="bul"></span>Tonight's Games</h2>
+        <span class="rule"></span>
+        <span class="sub" id="secNote">8:40 PM first puck</span>
+      </div>
+
+      <div class="toolbar">
+        <button class="tgl live" id="tglLive" aria-pressed="false">Live &amp; Final</button>
+        <button class="tgl" id="tglExpand" aria-pressed="false">Expand All</button>
+        <span class="count-note" id="countNote">Showing 15 of 15</span>
+      </div>
+
+      <section class="schedule" id="schedule" aria-label="Tonight's games"></section>
+      <div class="empty-note" id="emptyNote" hidden>No games in this division tonight</div>
+
+    </div>
+
+    <aside class="home-side">
+      <div class="sec-head" style="margin-top:24px;">
+        <h2><span class="bul"></span>Points Leaders</h2>
+        <span class="rule"></span>
+        <span class="sub">Tonight</span>
+      </div>
+      <div class="leaders">
+        <div class="ldr-head">
+          <span class="ttl">Game-Day Program</span>
+          <div class="chips" aria-label="Leader category">
+            <button class="chip active" data-cat="pts">Pts</button>
+            <button class="chip" data-cat="g">Goals</button>
+            <button class="chip" data-cat="a">Assists</button>
+          </div>
+        </div>
+        <table class="ldr-table" id="ldrTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Player</th>
+              <th class="num" id="ldrValHead">Pts</th>
+            </tr>
+            <tr id="subHead" style="display:none;"><th></th><th colspan="2" style="border:none;padding-top:0;"></th></tr>
+          </thead>
+          <tbody id="ldrBody"></tbody>
+        </table>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<footer>
+  <div class="f1">Chiller Adult Hockey League</div>
+  <div class="f2">Columbus, Ohio · Felt &amp; Ice · Design Concept 09 — Varsity</div>
+</footer>
+
+<script>
+'use strict';
+
+/* ================= REAL DATA — tonight, all times ET ================= */
+const GAMES = [
+  {t:"8:40 PM",  h:"Cyclones",              a:"Goalie Guacamole",       v:"Chiller Dublin",      div:"B", live:true, hs:3, as:2, per:"2nd", clk:"8:12",  str:"21 SOG · Evdokimov 22 SV"},
+  {t:"9:40 PM",  h:"Parking Lot Beers",     a:"Triple D",               v:"OhioHealth Ice Haus", div:"B", live:true, hs:1, as:1, per:"1st", clk:"14:31", str:"Fast tempo, 2 PP units"},
+  {t:"9:50 PM",  h:"Dayton Hawks",          a:"Dayton Fire",            v:"NTPRD Chiller",       div:"C", str:"Rivalry night · season series 1–1"},
+  {t:"9:50 PM",  h:"C Black Pizza (Saucy)", a:"Carlucci's Pizza Red",   v:"Chiller Dublin",      div:"C", str:"Pizza derby · 2 pts back"},
+  {t:"10:00 PM", h:"Busch League",          a:"Brew Jackets",           v:"Chiller Ice Works",   div:"B", str:"4-game win streak on the line"},
+  {t:"10:00 PM", h:"The Beer Barrel Boys",  a:"Gang Green",             v:"Chiller Dublin",      div:"B", str:"Both 2–0–1 in their last three"},
+  {t:"10:00 PM", h:"Goose Eggs",            a:"The Scorners",           v:"Chiller North",       div:"C", str:"Goose Eggs chasing a shutout streak"},
+  {t:"10:00 PM", h:"Whiskey Warriors",      a:"Vandelay Industries",    v:"Chiller North",       div:"C", str:"Importate! Vandalay rematch"},
+  {t:"10:05 PM", h:"Cyclops",               a:"Goodfellas",             v:"Chiller Easton",      div:"C", str:"Funny how? Funny like a clown"},
+  {t:"10:30 PM", h:"Shakers Raw Dogs",      a:"The Chicken Selects",    v:"Chiller North",       div:"D", str:"Late-night sauce special"},
+  {t:"10:30 PM", h:"Bu-Hockkey BT5",        a:"T5P Hockey",             v:"Chiller Easton",      div:"D", str:"BT5 home opener energy"},
+  {t:"10:50 PM", h:"Winking Lizard",        a:"Birdie Juicers",         v:"OhioHealth Ice Haus", div:"B", str:"Wings vs. birdies, feathers will fly"},
+  {t:"11:00 PM", h:"Puck Buddies",          a:"The tip in",             v:"Chiller Dublin",      div:"W", str:"Women's league nightcap"},
+  {t:"11:10 PM", h:"Brewins",               a:"The Wobbly Pirates",     v:"Chiller North",       div:"C", str:"Last call at Chiller North"},
+  {t:"11:10 PM", h:"CockTails and Dreams",  a:"Goal Train",             v:"Chiller Ice Works",   div:"C", str:"All aboard — final whistle of the night"}
+];
+const DIV_NAMES = {all:"All Divisions", B:"Division B", C:"Division C", D:"Division D", W:"Women's"};
+
+/* Points leaders — real, with G/A breakdown from the leaders file */
+const LEADERS = [
+  {name:"William Vonderahe",   team:"Black and Tan",           pts:5, g:0, a:5},
+  {name:"Brandon Spickler",    team:"Hamilton Mustangs (Thu)", pts:4, g:0, a:4},
+  {name:"Will Wuotila",        team:"Fluffers",                pts:4, g:0, a:4},
+  {name:"John Kemp",           team:"Black and Tan",           pts:3, g:2, a:1},
+  {name:"Matthew Brancaleone", team:"Hamilton Mustangs (Thu)", pts:2, g:2, a:0}
+];
+
+/* ================= STATE ================= */
+const state = { div:"all", liveOnly:false, allOpen:false, ldrCat:"pts" };
+const $  = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* initials for chenille badges */
+function initials(name){
+  const stop = new Set(['the','and','a','of','in']);
+  const words = name.split(/\s+/).filter(w => !stop.has(w.toLowerCase()));
+  let s = words.map(w => w[0]).join('').toUpperCase();
+  if(s.length > 2) s = s.slice(0,2);
+  return s || '?';
+}
+/* deterministic team color from name */
+function teamHue(name){
+  let h = 0;
+  for(let i=0;i<name.length;i++) h = (h*31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+function badgeStyle(name){
+  const h = teamHue(name);
+  return `hsl(${h} 42% 34%)`;
+}
+
+/* ================= PENNANT DIVISION FILTER ================= */
+$$('.pennant').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.div = btn.dataset.div;
+    $$('.pennant').forEach(p => {
+      const on = p === btn;
+      p.classList.toggle('active', on);
+      p.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    renderGames();
+  });
+});
+
+/* ================= LIVE / FINAL TOGGLE ================= */
+$('#tglLive').addEventListener('click', () => {
+  state.liveOnly = !state.liveOnly;
+  $('#tglLive').classList.toggle('on', state.liveOnly);
+  $('#tglLive').setAttribute('aria-pressed', state.liveOnly);
+  renderGames();
+});
+
+/* ================= EXPAND ALL ================= */
+$('#tglExpand').addEventListener('click', () => {
+  state.allOpen = !state.allOpen;
+  $('#tglExpand').classList.toggle('active', state.allOpen);
+  $('#tglExpand').setAttribute('aria-pressed', state.allOpen);
+  $$('#schedule .g-row').forEach(row => setRowOpen(row, state.allOpen));
+});
+
+function setRowOpen(row, open){
+  row.classList.toggle('open', open);
+  $('.g-detail', row).hidden = !open;
+  $('.g-main', row).setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+function rowMainClick(e){
+  const row = e.currentTarget.closest('.g-row');
+  setRowOpen(row, !row.classList.contains('open'));
+}
+
+/* ================= RENDER GAMES ================= */
+function gameRow(g){
+  const live  = !!g.live;
+  const final = g.state === 'final';
+  const row = document.createElement('article');
+  row.className = 'g-row' + (live ? ' live' : '') + (final ? ' final' : '');
+  row.dataset.div = g.div;
+
+  const status = live
+    ? `<span class="pill live"><span class="pulse"></span>Live · ${g.per} · ${g.clk}</span>`
+    : final
+      ? `<span class="pill final">Final</span>`
+      : `<span class="pill sched">${g.t}</span>`;
+
+  const scoreHTML = live || final ? `
+    <span class="flip" data-flip="hs">${digitHTML(g.hs)}</span>
+    <span class="flip" data-flip="as">${digitHTML(g.as)}</span>` : '';
+
+  const homeWin = final && g.hs > g.as;
+  const awayWin = final && g.as > g.hs;
+
+  row.innerHTML = `
+    <button class="g-main" aria-expanded="false">
+      <span class="g-time">${g.t.replace(' PM','')}<span class="ampm">PM</span></span>
+      <span class="g-teams">
+        <span class="g-team">
+          <span class="badge" style="background:${badgeStyle(g.h)}">${initials(g.h)}</span>
+          <span class="nm">${g.h}</span>
+          ${homeWin ? '<span class="seed">W</span>' : ''}
+        </span>
+        <span class="g-team">
+          <span class="badge" style="background:${badgeStyle(g.a)}">${initials(g.a)}</span>
+          <span class="nm">${g.a}</span>
+          ${awayWin ? ' <span class="seed">W</span>' : ''}
+        </span>
+      </span>
+      <span class="score-wrap">
+        ${status}
+        ${scoreHTML}
+        <span class="chev" aria-hidden="true">▼</span>
+      </span>
+      <span class="venue">${g.v} · ${DIV_NAMES[g.div]}</span>
+    </button>
+    <div class="g-detail" hidden>
+      <div class="d-grid">
+        <div class="d-col">
+          <h4>Matchup Notes</h4>
+          <p class="d-note">${g.str}</p>
+        </div>
+        <div class="d-col">
+          <h4>Rink Report</h4>
+          <table>
+            <tr><td>Facility</td><td>${g.v}</td></tr>
+            <tr><td>Division</td><td>${DIV_NAMES[g.div]}</td></tr>
+            <tr><td>Facility</td><td>${g.v}</td></tr>
+            <tr><td>Puck Drop</td><td>${g.t} ET</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+  $('.g-main', row).addEventListener('click', rowMainClick);
+  return row;
+}
+function digitHTML(n){
+  return String(n).split('').map(d => `
+    <span class="flip-digit">
+      <span class="stat">${d}</span>
+      <span class="f-top"><span>${d}</span></span>
+      <span class="f-new"><span>${d}</span></span>
+    </span>`).join('');
+}
+
+function renderGames(){
+  const sched = $('#schedule');
+  sched.innerHTML = '';
+  let shown = 0;
+  GAMES.forEach(g => {
+    if(state.div !== 'all' && g.div !== state.div) return;
+    if(state.liveOnly && !(g.live || g.state === 'final')) return;
+    sched.appendChild(gameRow(g));
+    shown++;
+  });
+  $('#countNote').textContent = `Showing ${shown} of ${GAMES.length}`;
+  $('#emptyNote').hidden = shown !== 0;
+  if(state.allOpen){
+    $$('#schedule .g-row').forEach(r => setRowOpen(r, true));
+  }
+}
+
+/* ================= LEADERS TABLE ================= */
+function renderLeaders(){
+  const cat = state.ldrCat;
+  const head = {pts:'Pts', g:'Goals', a:'Assists'}[cat];
+  $('#ldrValHead').textContent = head;
+  $('#ldrBody').innerHTML = LEADERS.map((p,i) => `
+    <tr>
+      <td class="rk">${i+1}</td>
+      <td>
+        <span class="pnm">${p.name}</span>
+        <span class="ptm">${p.team}</span>
+      </td>
+      <td class="num">
+        <span class="val">${p[cat]}</span>
+        ${cat==='pts' ? `<span class="sub">${p.g}G · ${p.a}A</span>` : ''}
+      </td>
+    </tr>`).join('');
+}
+$$('.chip').forEach(c => c.addEventListener('click', () => {
+  state.ldrCat = c.dataset.cat;
+  $$('.chip').forEach(x => x.classList.toggle('active', x === c));
+  renderLeaders();
+}));
+
+/* ================= SIGNATURE: SPLIT-FLAP LIVE SCORES ================= */
+/* Demo clock: LIVE games tick, goals occasionally land — flipboard does its thing. */
+function setFlip(el, n){
+  const digits = $$('.flip-digit', el);
+  const str = String(n).padStart(digits.length, '0');
+  digits.forEach((dig, i) => {
+    const oldD = $('.stat', dig).textContent;
+    const newD = str[i];
+    if(oldD === newD) return;
+    if(reduceMotion){ $('.stat', dig).textContent = newD; return; }
+    $('.stat', dig).textContent = newD;           /* resting layer = new value */
+    const top = $('.f-top', dig), nw = $('.f-new', dig);
+    $('span', top).textContent = oldD;            /* falling top half = old value */
+    $('span', nw).textContent = newD;             /* rising bottom half = new value */
+    top.classList.remove('flipping'); nw.classList.remove('flipping');
+    void top.offsetWidth;                          /* reflow to restart animation */
+    top.classList.add('flipping'); nw.classList.add('flipping');
+  });
+}
+
+let demoT = 0;
+function tickDemo(){
+  demoT++;
+  /* keep clocks honest-ish */
+  $$('.g-row.live').forEach(row => {
+    const g = GAMES[Number(row.dataset.i)];
+    if(!g || !g.clk) return;
+    const [m,s] = g.clk.split(':').map(Number);
+    let t = m*60 + s - 3;
+    if(t < 0) t = 19*60 + 59;
+    g.clk = `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+    const pill = $('.pill.live', row);
+    if(pill) pill.innerHTML = `<span class="pulse"></span>Live · ${g.per} · ${g.clk}`;
+  });
+  /* every ~14s, a goal lands on a LIVE game -> split-flap flip */
+  if(demoT % 14 === 0){
+    const liveRows = $$('.g-row.live');
+    if(liveRows.length){
+      const row = liveRows[demoT/14 % liveRows.length | 0];
+      const g = GAMES[Number(row.dataset.i)];
+      const home = demoT % 2 === 0;
+      if(home) g.hs++; else g.as++;
+      const el = $(home ? '[data-flip="hs"]' : '[data-flip="as"]', row);
+      setFlip(el, home ? g.hs : g.as);
+    }
+  }
+}
+setInterval(tickDemo, 3000);
+
+/* ================= BOOT ================= */
+GAMES.forEach((g,i) => g.i = i);
+renderGames();
+renderLeaders();
+</script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+my shell sha256[:12]: 7cde145fab61 len 13161
+deployed sha256[:12]: 7cde145fab61
+=== shell asset URLs ===
+  https://fonts.googleapis.com
+  https://fonts.gstatic.com
+  https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Saira+Condensed:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap
+  /static/img/cahl-logo.svg
+  /static/img/cahl-icon-192.png
+  /static/manifest.json
+  /static/css/style.css?v=70
+  /static/css/landing.css?v=70
+  /static/js/app.js?v=70
+=== app.js v67->v70 full hunks ===
+@@ -28,9 +28,9 @@
+ 
+ // Frontend version — shown in the badge. The old window.APP_VERSION
+ // dual-check is gone (index.html's stale copy caused a reload on every
+ // boot); /api/version self-heal below is the only reload path now.
+-const JS_VERSION = 67;
++const JS_VERSION = 70;
+ 
+ // Self-heal: if the server is running a NEWER frontend than this cached JS, reload fresh.
+ fetch('/api/version').then(r => r.json()).then(v => {
+   if (v.js > JS_VERSION && !sessionStorage.getItem('vserverheal')) {
+---
+@@ -278,9 +278,9 @@
+ 
+     function leaderSection(title, list, valKey) {
+       if (!list || !list.length) return '';
+       const rows = list.map(p =>
+-        `<tr class="link" onclick="selectPlayer('${p.team_id || ''}','${p.player_id || ''}')"><td class="num">${p.rank || ''}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
++        `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id || ''}','${p.player_id}')\" class=\"link\"` : ''}><td class="num">${p.rank || ''}</td><td>${esc(p.name)}</td><td>${esc(p.team)}</td><td class="num">${p[valKey] ?? p.value ?? 0}</td></tr>`
+       ).join('');
+       return `<h3 style="margin-top:16px">${title}</h3><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th class="num">${title}</th></tr></thead><tbody>${rows}</tbody></table>`;
+     }
+ 
+---
+@@ -698,17 +698,17 @@
+       html += shown.map((p, i) => {
+         const ppg = p.gp ? p.pts / p.gp : 0;
+         const pct = Math.max(4, Math.min(100, ppg / ppgMax * 100));
+         return `
+-        <tr class="link" onclick="selectPlayerToken('${p.token || ''}')">
++        <tr ${p.token ? `onclick=\"selectPlayerToken('${p.token}')\" class=\"link\"` : ''}>
+           <td class="num">${i + 1}</td>
+-          <td><span class="link">${esc(p.name)}</span></td>
++          <td>${esc(p.name)}</td>
+           <td>${esc(p.team)}</td>
+           <td>${posChip(p)}</td>
+-          <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td>
+-          <td class="num">${p.pts}</td>
++          <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td>
++          <td class="num">${p.pts ?? '-'}</td>
+           <td class="num"><div class="ppg-bar"><div class="ppg-fill" style="width:${pct.toFixed(1)}%"></div><span class="ppg-median" style="left:${ppgMedianPct.toFixed(1)}%"></span><span class="ppg-val">${p.gp ? ppg.toFixed(2) : '-'}</span></div></td>
+-          <td class="num">${p.pim}</td>
++          <td class="num">${p.pim ?? '-'}</td>
+         </tr>`;
+       }).join('');
+       html += '</tbody></table>';
+       if (!showAll && rows.length > shown.length) {
+---
+@@ -1235,9 +1235,9 @@
+       }
+ 
+       // Sponsor strip: Upright Creative (official league sponsor)
+       html += '<a class="sponsor-strip" href="https://uprightcreativeco.com" target="_blank" rel="noopener" aria-label="Sponsored by Upright Creative">'
+-        + '<img src="/static/img/upright-crown.png" alt="" aria-hidden="true" />'
++        + '<img src="/static/img/upright-lockup.png" alt="" aria-hidden="true" />'
+         + '<span><span class="sponsor-strip-kicker">Official Sponsor</span>'
+         + '<span class="sponsor-strip-text">Upright Creative \u2014 Photo \u00b7 Video \u00b7 Design</span></span></a>';
+       return html;
+     }
+---
+@@ -2182,10 +2182,10 @@
+         html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
+         html += skaterHead + sortRows(sec.players, rs.key, rs.dir, SKATER_VAL).map(p => `
+           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
+             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
+-            <td class="num">${p.gp}</td><td class="num">${p.g}</td><td class="num">${p.a}</td><td class="num">${p.pts}</td>
+-            <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim}</td>
++            <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td><td class="num">${p.pts ?? '-'}</td>
++            <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">${p.pim ?? '-'}</td>
+           </tr>`).join('') + '</tbody></table>';
+       });
+ 
+       if (roster.goalies.length) {
+---
+@@ -2204,9 +2204,9 @@
+           + '</tr></thead><tbody>';
+         html += sortRows(roster.goalies, gs.key, gs.dir, GOALIE_VAL).map(p => `
+           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.name)}">
+             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
+-            <td class="num">${p.gp}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
++            <td class="num">${p.gp ?? '-'}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
+             <td class="num">${p.gp ? Math.round((p.w / p.gp) * 100) + '%' : '-'}</td>
+             <td class="num">${p.ga}</td><td class="num">${typeof p.gaa === 'number' ? p.gaa.toFixed(1) : p.gaa}</td>
+           </tr>`).join('');
+         html += '</tbody></table>';
+---
+@@ -2517,9 +2517,9 @@
+ 
+       // League leaders — kept, restyled with mono position chips
+       const leaders = data.leaders || {};
+       html += '<h3>Top Scorers</h3><table><thead><tr><th>Player</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>';
+-      html += (leaders.points || []).map((p, i) => `<tr class="link" onclick="selectPlayer('${p.team_id}','${p.player_id}')"><td><span class="pos-chip${i === 0 ? ' pos-chip--1' : (i < 3 ? ' pos-chip--2' : '')}">${i + 1}</span><span class="link">${esc(p.name)}</span></td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
++      html += (leaders.points || []).map((p, i) => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"` : ''}><td><span class="pos-chip${i === 0 ? ' pos-chip--1' : (i < 3 ? ' pos-chip--2' : '')}">${i + 1}</span>${esc(p.name)}</td><td>${esc(p.team)}</td><td class="num">${p.value}</td></tr>`).join('');
+       html += '</tbody></table></div>';
+ 
+       setMainHtml(html);
+       // Grow the heat bars in via CSS transition (snaps instantly under reduced motion)
+=== style.css v67 -> v70 diff ===
+old style bytes: 88697
+hunks: 3
+--- 
++++ 
+@@ -33,5 +33,5 @@
+   /* CBJ hues, night-tuned */
+   --union: #2a7fd4;             /* Union Blue, luminance-lifted for dark canvas */
+-  --union-hover: #3a8fe0;       /* R6: off-token hover hue retokened */
++  --union-hover: #2b71c4;       /* R6 retokened; R9-4 darkened: 4.6:1 with white label */
+   --union-cta: #1f6cb8;         /* R8: gate CTA idle (5.4:1 with white) */
+   --sponsor-gold: #b8925e;      /* R8: sponsor brand accent (dark surfaces) */
+@@ -781,4 +781,5 @@
+ .pal-input-row { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--panel-3); }
+ .pal-input-row svg { flex: 0 0 auto; stroke: var(--muted); }
++.pal-input-row:focus-within { box-shadow: inset 0 0 0 2px var(--union); border-radius: inherit; }
+ .pal-input-row input {
+   flex: 1; height: 52px; padding: 0; border: none; border-radius: 0;
+@@ -1718,5 +1719,4 @@
+ }
+ html[data-theme="light"] .rink-head { color: var(--union-deep); }
+-html[data-theme="light"] .rink-head { color: var(--union-deep); }
+ @media (max-width: 599px) {
+   .tonight-strip { gap: 6px; }
+=== token rows region L690-725 ===
+690:       // Position chips: D/F/G color-coded mono badges (defense=union, forward=text, goalie=accent).
+691:       const POS_KEY = { d: 'pos-d', f: 'pos-f', g: 'pos-g' };
+692:       const posChip = p => {
+693:         const raw = (p.position || '').trim();
+694:         if (!raw || raw === '-') return '-';
+695:         const k = POS_KEY[raw.charAt(0).toUpperCase()];
+696:         return k ? `<span class="pos-chip ${k}">${esc(raw.slice(0, 2).toUpperCase())}</span>` : esc(raw);
+697:       };
+698:       html += shown.map((p, i) => {
+699:         const ppg = p.gp ? p.pts / p.gp : 0;
+700:         const pct = Math.max(4, Math.min(100, ppg / ppgMax * 100));
+701:         return `
+702:         <tr ${p.token ? `onclick=\"selectPlayerToken('${p.token}')\" class=\"link\"` : ''}>
+703:           <td class="num">${i + 1}</td>
+704:           <td>${esc(p.name)}</td>
+705:           <td>${esc(p.team)}</td>
+706:           <td>${posChip(p)}</td>
+707:           <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td>
+708:           <td class="num">${p.pts ?? '-'}</td>
+709:           <td class="num"><div class="ppg-bar"><div class="ppg-fill" style="width:${pct.toFixed(1)}%"></div><span class="ppg-median" style="left:${ppg
+710:           <td class="num">${p.pim ?? '-'}</td>
+711:         </tr>`;
+712:       }).join('');
+713:       html += '</tbody></table>';
+714:       if (!showAll && rows.length > shown.length) {
+715:         html += `<button class="ghost small" data-showall style="margin-top:10px">Show all ${rows.length} players</button>`;
+716:       } else if (showAll && rows.length > 100) {
+717:         html += `<button class="ghost small" data-showall style="margin-top:10px">Show top 100</button>`;
+718:       }
+719:       html += '</div>';
+720:       return html;
+721:     }
+722: 
+723:     function _legacyBindTeamSearch() {
+724:       const input = $('#teamSearch');
+725:       const box = $('#teamSuggest');
+=== dead-team region L1995-2020 ===
+1995:         try {
+1996:           const res = await fetch(`/api/team/${teamId}` + (refresh ? '?_=' + Date.now() : ''), { signal: ctrl.signal, cache: 'no-store' });
+1997:           data = await res.json();
+1998:         } finally { clearTimeout(timer); }
+1999:         if (data.error) {
+2000:           // R8-A self-heal: a saved team whose upstream page is gone (old
+2001:           // season, renamed slug) must not dead-end the tab forever. Clear the
+2002:           // stale id, fall back to the picker, and let the user re-pick once.
+2003:           const dead = /no longer available/i.test(String(data.error));
+2004:           if (dead) {
+2005:             state.teamId = '';
+2006:             localStorage.removeItem('cahl-team');
+2007:             if (state.myTeam === teamId) { state.myTeam = ''; localStorage.removeItem('cahl-myteam'); }
+2008:             $content.innerHTML = `<div class="card"><div class="empty">${esc(data.error)}</div>`
+2009:               + `<div class="picker-hint" style="margin-top:12px">Pick your team below to save a new one.</div></div>`;
+2010:             renderTeam(); // re-render the card with picker + search visible
+2011:             return;
+2012:           }
+2013:           $content.innerHTML = `<div class="error">${esc(data.error)}</div>`;
+2014:           return;
+2015:         }
+2016: 
+2017:         const over = data.overview;
+2018:         const standings = data.standings || [];
+2019:       const rankIdx = standings.findIndex(s => s.team_id === teamId);
+2020:       const rank = rankIdx >= 0 ? rankIdx + 1 : 0;
+=== hunk regions L2180-2215 ===
+2180:         + '</tr></thead><tbody>';
+2181:       roster.sections.forEach(sec => {
+2182:         html += `<div class="form-chips-label">${esc(sec.label)}</div>`;
+2183:         html += skaterHead + sortRows(sec.players, rs.key, rs.dir, SKATER_VAL).map(p => `
+2184:           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.na
+2185:             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td><td>${esc(p.position || '-')}</td>
+2186:             <td class="num">${p.gp ?? '-'}</td><td class="num">${p.g ?? '-'}</td><td class="num">${p.a ?? '-'}</td><td class="num">${p.pts ?? '-'}</td
+2187:             <td class="num">${p.gp ? (p.pts / p.gp).toFixed(2) : '-'}</td><td class="num">${p.gp ? (p.g / p.gp).toFixed(2) : '-'}</td><td class="num">
+2188:           </tr>`).join('') + '</tbody></table>';
+2189:       });
+2190: 
+2191:       if (roster.goalies.length) {
+2192:         const gs = state.goalieSort;
+2193:         html += '<div class="form-chips-label">Goalies</div>';
+2194:         html += '<table><thead><tr>'
+2195:           + sortTh('jersey', '#', gs, 'goalies')
+2196:           + sortTh('name', 'Goalie', gs, 'goalies')
+2197:           + sortTh('gp', 'GP', gs, 'goalies', true)
+2198:           + sortTh('w', 'W', gs, 'goalies', true)
+2199:           + sortTh('l', 'L', gs, 'goalies', true)
+2200:           + sortTh('otl', 'OTL', gs, 'goalies', true)
+2201:           + sortTh('winpct', 'Win%', gs, 'goalies', true)
+2202:           + sortTh('ga', 'GA', gs, 'goalies', true)
+2203:           + sortTh('gaa', 'GAA', gs, 'goalies', true)
+2204:           + '</tr></thead><tbody>';
+2205:         html += sortRows(roster.goalies, gs.key, gs.dir, GOALIE_VAL).map(p => `
+2206:           <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="${esc(p.na
+2207:             <td>${esc(p.jersey || '-')}</td><td><span class="link">${esc(p.name)}</span></td>
+2208:             <td class="num">${p.gp ?? '-'}</td><td class="num">${p.w}</td><td class="num">${p.l}</td><td class="num">${p.otl}</td>
+2209:             <td class="num">${p.gp ? Math.round((p.w / p.gp) * 100) + '%' : '-'}</td>
+2210:             <td class="num">${p.ga}</td><td class="num">${typeof p.gaa === 'number' ? p.gaa.toFixed(1) : p.gaa}</td>
+2211:           </tr>`).join('');
+2212:         html += '</tbody></table>';
+2213:       }
+2214: 
+2215:       $content.innerHTML = html;
+=== localStorage init L45-60 ===
+45:     const navLinks = document.querySelectorAll('.nav-link');
+46: 
+47:     let state = {
+48:       tab: 'today',
+49:       leagueId: localStorage.getItem('cahl-league') || '',
+50:       leagueDay: localStorage.getItem('cahl-league-day') || '',
+51:       teamId: localStorage.getItem('cahl-team') || '',
+52:       // Your saved default team (drives the Today hero); teamId is just what you're browsing
+53:       myTeam: localStorage.getItem('cahl-myteam') || localStorage.getItem('cahl-team') || '',
+54:       auto: false,
+55:       leagues: [],
+56:       teams: [],
+57:       teamsLeague: '',
+58:       allTeams: [],
+59:       allTeamsLoading: false,
+60:       teamsError: false,
+=== esc RENDER-site census (interpolation of data.error / e.message) ===
+unescaped interpolation sites: 0
+escaped render sites: [1051, 1300, 1471, 1637, 1704, 1942, 2008, 2013, 2317, 2328, 2354]
+=== inline style= count (fixed) ===
+style=" occurrences: 43
+onclick=" occurrences: 22
+=== token definitions used w/o fallback exist in style.css :root ===
+  --union-cta: defs in style.css=1, uses in landing.css=1
+  --union-hover: defs in style.css=1, uses in landing.css=1
+  --sponsor-gold: defs in style.css=2, uses in landing.css=3
+  --mono-sm: defs in style.css=1, uses in landing.css=4
+  --mono-xs: defs in style.css=1, uses in landing.css=2
+  --display: defs in style.css=1, uses in landing.css=5
+=== client fetch ceilings (players) ===
+  L303: const timer = setTimeout(() => ctrl.abort(), 25000);
+  L885: const kill = setTimeout(() => ctrl.abort(), 30000);
+  L1994: const timer = setTimeout(() => ctrl.abort(), 25000);
+  L3046: const timer = setTimeout(() => kpalLookupCtrl.abort(), 45000);
+=== team fetch URL (for dead-team probe) ===
+  L305: const res = await fetch('/api/teams', { signal: ctrl.signal, cache: 'no-store' });
+  L1313: const data = await api(`/api/team/${teamId}`, refresh);
+  L1826: const [a, b] = await Promise.all([api(`/api/team/${state.cmpA}`), api(`/api/team/${state.cmpB}`)]);
+  L1996: const res = await fetch(`/api/team/${teamId}` + (refresh ? '?_=' + Date.now() : ''), { signal: ctrl.signal, cache: 'no-store' });
+  L2277: const data = await api(`/api/team/${teamId}/history`);
+  L2595: const data = await api(`/api/team/${teamId}`);

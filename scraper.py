@@ -8,7 +8,15 @@ from html import unescape
 
 BASE_URL = "https://www.chillerstats.com"  # site now 302-redirects http -> https; go direct
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "Connection": "keep-alive",
 }
 
 session = requests.Session()
@@ -65,6 +73,15 @@ def _url(path):
     return f"{BASE_URL}/{path.lstrip('/')}"
 
 
+_JINA_RELAY = "https://r.jina.ai/"
+
+def _fetch_via_relay(url, timeout):
+    """Datacenter-IP fallback: ChillerStats blocks cloud-provider IP ranges with 403.
+    r.jina.ai renders the page from cleaner IPs and can return the original HTML."""
+    req = requests.get(_JINA_RELAY + url, headers={"X-Return-Format": "html"}, timeout=timeout)
+    req.raise_for_status()
+    return req.text
+
 def get_soup(path, fresh=False, timeout=30):
     key = f"html:{path}"
     text = None if fresh else cache.get(key)
@@ -75,11 +92,36 @@ def get_soup(path, fresh=False, timeout=30):
             text = resp.text
             # Throttle/error pages are tiny; real pages are tens of KB.
             # Never cache a suspicious page — that poisons every downstream parse.
+            # Empty/0-byte responses mean the upstream ID is dead (e.g. a stale
+            # saved team from an old season): say that in player-facing language
+            # instead of leaking scraper internals into the UI.
             if len(text) < 2000:
+                if len(text) <= 64 and "TeamID=" in path:
+                    return None, "This team\u2019s page is no longer available on ChillerStats \u2014 pick your team again from the list."
                 return None, f"Suspiciously short page ({len(text)} bytes): {path}"
             cache.set(key, text)
         except Exception as e:
-            return None, str(e)
+            msg = str(e)
+            # Datacenter-IP fallback: try the relay once before surfacing an error.
+            if "403" in msg or "Forbidden" in msg or "429" in msg or "Too Many Requests" in msg:
+                # Two relay attempts with a short pause — the relay hiccups occasionally
+                # (returning markdown instead of HTML); a retry usually clears it.
+                for attempt in range(2):
+                    try:
+                        text = _fetch_via_relay(_url(path), timeout)
+                        if text and len(text) > 2000:
+                            cache.set(key, text)
+                            return BeautifulSoup(text, "html.parser"), None
+                    except Exception:
+                        pass
+                    if attempt == 0:
+                        time.sleep(1.5)
+                return None, ("The league's stats site (ChillerStats) is blocking our server's requests "
+                              "right now. Scores are temporarily unavailable \u2014 this usually clears on its own; "
+                              "no action needed.")
+            if "timed out" in msg.lower() or "timeout" in msg.lower():
+                return None, "The league's stats site is slow to respond right now. Please refresh in a moment."
+            return None, "Couldn't reach the league's stats site. Please refresh in a moment."
     return BeautifulSoup(text, "html.parser"), None
 
 

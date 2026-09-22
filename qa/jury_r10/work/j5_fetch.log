@@ -1,0 +1,8 @@
+/  5.43s status=200 bytes=13161 ok=True
+/app.js?v=70  22.15s status=HTTP Error 404: Not Found bytes=0 ok=False
+/style.css?v=70  6.98s status=HTTP Error 404: Not Found bytes=0 ok=False
+/landing.css?v=70  1.16s status=HTTP Error 404: Not Found bytes=0 ok=False
+/api/today  1.97s status=200 wire_bytes=5185 ok=True
+/api/teams  2.57s status=200 wire_bytes=84895 ok=True
+/api/leaders  7.95s status=200 wire_bytes=2536 ok=True
+/api/players  17.84s status=200 wire_bytes=5518276 ok=True

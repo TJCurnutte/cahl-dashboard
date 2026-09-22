@@ -1,0 +1,49 @@
+=== live-pill markup in app.js ===
+=== live-pill styles ===
+  L239: .live-pill {
+  L248: .live-pill:focus-within { outline: 2px solid var(--union); outline-offset: 2px; }
+  L250: .live-pill:has(#autoToggle:checked) { color: var(--text-2); border-color: var(--border-strong); background: var(--panel-3); }
+  L251: .live-pill:has(#autoToggle:checked) .live-pill-dot { background: var(--win); }
+  L252: .live-pill .live-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+  L254: body.has-live .live-pill {
+  L258: body.has-live .live-pill .live-pill-dot {
+  L262: html[data-theme="light"] body.has-live .live-pill {
+  L1358: .live-pill {
+  L1410: .live-pill { display: none !important; }
+  L1951: .live-pill { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; }
+  L1952: .live-pill .live-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  L1965: #kpalBtn, .live-pill { min-height: 44px; }
+  L1967: .live-pill { padding: 0 10px; }
+  L1974: .live-pill { height: 44px; padding: 0 12px; letter-spacing: 0.08em; }
+=== spinner markup usage in app.js ===
+  L834: ptrHint.appendChild(Object.assign(document.createElement('span'), { className: 'spinner' }));
+  L918: $refresh.appendChild(Object.assign(document.createElement('span'), { className: 'spinner' }));
+  L929: // refresh can never leave it permanently disabled with a spinner.
+=== .spinner full decl ===
+947: @keyframes shimmer { to { transform: translateX(100%); } }
+948: .spinner {
+949:   width: 18px; height: 18px;
+950:   border: 2px solid var(--border);
+951:   border-top-color: var(--accent);
+952:   border-radius: 50%;
+953:   animation: spin 0.8s linear infinite;
+954:   display: inline-block;
+955: }
+956: @keyframes spin { to { transform: rotate(360deg); } }
+=== .pal-ov / .pal markup usage (palette open) ===
+=== does RM block or any rule kill .pal-ov.open / .pal animation? ===
+[(769, '.pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }'), (1218, '.t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }')]
+=== kpal spinner context (L3040-3050) ===
+3040:       // Own controller on purpose: lookupPlayers() shares one AbortController
+3041:       // with the Players-tab typeahead, so borrowing it would let the palette
+3042:       // and the tab search abort each other mid-flight (stuck lookups).
+3043:       if (kpalLookupCtrl) kpalLookupCtrl.abort();
+3044:       kpalLookupCtrl = new AbortController();
+3045:       try {
+3046:         const timer = setTimeout(() => kpalLookupCtrl.abort(), 45000);
+3047:         const res = await fetch('/api/players/lookup?q=' + encodeURIComponent(query), {
+3048:           signal: kpalLookupCtrl.signal,
+3049:           cache: 'no-store',
+3050:         });
+3051:         clearTimeout(timer);
+3052:         if (seq !== kpalLookupSeq || !kpal.open) return;

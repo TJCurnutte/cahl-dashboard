@@ -1,0 +1,92 @@
+=== openPlayer refs ===
+  L2337: window.openPlayer = (opts) => {
+  L2670: else openPlayer({
+  L2702: openPlayer({
+  L2732: openPlayer({
+=== full catch L2210-2228 ===
+2210:             <td class="num">${p.ga}</td><td class="num">${typeof p.gaa === 'number' ? p.gaa.toFixed(1) : p.gaa}</td>
+2211:           </tr>`).join('');
+2212:         html += '</tbody></table>';
+2213:       }
+2214: 
+2215:       $content.innerHTML = html;
+2216:       a11yFix($content);
+2217:       animateNumbers($content);
+2218:       fillTeamHistory(teamId);
+2219:       } catch (err) {
+2220:         hardFail = (err && err.name === 'AbortError') ? 'Team request timed out'
+2221:           : (err && err.message ? err.message : 'Failed to render team');
+2222:       } finally {
+2223:         disarm();
+2224:         if (hardFail) {
+2225:           const c = document.getElementById('teamContent');
+2226:           if (c) c.innerHTML = teamErrorHtml(teamId, hardFail);
+2227:         }
+2228:       }
+=== api() core L885-910 ===
+885:       const kill = setTimeout(() => ctrl.abort(), 30000);
+886:       try {
+887:         const bust = (refresh || path.indexOf('/api/today') === 0)
+888:           ? (path.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()
+889:           : '';
+890:         // One silent retry on network failure or 5xx: Vercel cold starts and
+891:         // cell-network blips otherwise surface as full-page errors for what is
+892:         // a transient condition. The 30s ceiling above still governs the total.
+893:         let res = null;
+894:         for (let attempt = 0; attempt < 2; attempt++) {
+895:           try {
+896:             res = await fetch(path + bust, { cache: 'no-store', signal: ctrl.signal });
+897:             if (res.ok || attempt === 1) break;
+898:           } catch (e) {
+899:             if (attempt === 1 || e.name === 'AbortError') throw e;
+900:           }
+901:           await new Promise(r => setTimeout(r, 700));
+902:         }
+903:         const data = await res.json();
+904:         if (res.ok) state.cache[cacheKey] = data;
+905:         return data;
+906:       } catch (e) {
+907:         return { error: e && e.name === 'AbortError'
+908:           ? 'This took too long — tap Refresh to retry.'
+909:           : 'Network error. Try Refresh.' };
+910:       } finally {
+=== RM: selector context for each animation decl ===
+  L260: body.has-live .live-pill .live-pill-dot { background: var(--accent); animation: live-dot-pulse 1.4s ease-in-out infinite;
+  L362: .sb-card[data-status="live"]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); box-shadow:
+  L379: .sb-live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: live-dot-pulse 1.4s ease-in-out inf
+  L411: .sb-num.flash { animation: score-flash 0.9s var(--ease); }
+  L468: .t-score.live-badge { background: var(--accent-dim); border-color: rgba(232,37,60,0.4); color: var(--accent); font-family: var(--mono); font-size: var
+  L769: .pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }
+  L778: .pal { width: min(620px, 100%); background: var(--panel-3); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-sh
+  L834: .live-dot, .live-dot-inline { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: none; animation: live-dot-pulse 1.4s ea
+  L870: .game-card .live { display: inline-block; background: var(--accent-dim); color: var(--accent); font-family: var(--mono); font-size: var(--mono-xs); fo
+  L945: .skeleton::after, .skeleton-card::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, 
+  L953: .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linea
+  L1280: .hero-next-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--union); animation: hero-next-pulse 1.8s var(--ease) infinite;
+  L1310: .card, .sb-card { animation: rise-in 0.24s var(--ease) both; }
+=== today payload structure ===
+keys: ['leagues', 'today']
+  leagues: list n=27
+    sample keys: ['id', 'name']
+  today: list n=2
+    sample keys: ['away', 'away_id', 'facility', 'home', 'home_id', 'time']
+=== from_supabase / partial markers in saved payloads ===
+  api_today.json: from_supabase=False partial_true=False partial_false=False
+  api_teams.json: from_supabase=False partial_true=False partial_false=False
+  api_leaders.json: from_supabase=False partial_true=False partial_false=False
+  api_players.json: from_supabase=False partial_true=False partial_false=False
+=== today games empty? ===
+games value type/len: list 0
+=== landing.css remaining literal sizes vs system scale ===
+  sizes: ['13', '14', '16', '20', '26', '30', '34'] | system scale: 13/14/16/20/26/30/34 (+var tokens)
+  off-scale: []
+=== style.css literal font-size census (app scale) ===
+  sizes: ['13', '14', '16', '18', '20', '26', '30', '34']
+=== landing hero title + gate-cta final state ===
+  L57: .lp-cta-sm { min-height: 44px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
+  L91: .gate-cta {
+  L205: .lp-title { font-size: 30px; }
+  L212: .lp-title { font-size: 26px; }
+  L213: .gate-cta { min-height: 50px; padding: 0 26px; font-size: 16px; }
+=== pos-chip / link class on guarded rows (consistency) ===
+  L282 keeps class=link ONLY when guarded (inside template ternary): False

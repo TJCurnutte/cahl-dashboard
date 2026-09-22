@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 338" role="img" aria-label="CAHL — Chiller Adult Hockey League">
+  <defs>
+    <path id="arcText" d="M 88 219 Q 260 247 432 219" fill="none"/>
+  </defs>
+
+  <!-- badge stack: outer keyline / red ring / inner keyline / navy field -->
+  <ellipse cx="260" cy="169" rx="252" ry="161" fill="#ffffff"/>
+  <ellipse cx="260" cy="169" rx="242" ry="150.5" fill="#ce2029"/>
+  <ellipse cx="260" cy="169" rx="233" ry="142" fill="#ffffff"/>
+  <ellipse cx="260" cy="169" rx="228" ry="137.5" fill="#16264a"/>
+
+  <!-- CAHL wordmark: ultra-bold oblique block letters (paths, no font deps) -->
+  <g transform="translate(88 199) skewX(-14)" fill="#ffffff">
+    <!-- C -->
+    <path d="M 0 -120 L 66 -120 L 66 -92 L 27 -92 L 27 -28 L 66 -28 L 66 0 L 0 0 Z"/>
+    <!-- A (evenodd counter) -->
+    <path fill-rule="evenodd" d="M 76 0 L 106 -120 L 128 -120 L 158 0 L 128 0 L 122 -30 L 110 -30 L 104 0 Z M 107 -66 L 117 -102 L 126 -66 Z"/>
+    <!-- H -->
+    <path d="M 160 -120 L 188 -120 L 188 -76 L 204 -76 L 204 -120 L 230 -120 L 230 0 L 204 0 L 204 -48 L 188 -48 L 188 0 L 160 0 Z"/>
+    <!-- L as hockey stick: stem + blade kicking down-right, square-cut tip -->
+    <path d="M 240 -120 L 266 -120 L 266 0 L 240 0 Z"/>
+    <path d="M 264 -70 L 368 -40 L 368 -12 L 264 -44 Z"/>
+  </g>
+
+  <!-- large star, upper right (clear of the stem) -->
+  <g transform="translate(424 124) scale(0.8)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g>
+
+  <!-- arched league name -->
+  <text font-family="'Arial Narrow','Helvetica Neue',Arial,sans-serif" font-size="20.5" font-weight="700" letter-spacing="1.5" fill="#ffffff">
+    <textPath href="#arcText" startOffset="50%" text-anchor="middle">CHILLER ADULT HOCKEY LEAGUE</textPath>
+  </text>
+
+  <!-- five stars along the bottom arc, centered on the badge axis -->
+  <g transform="translate(150 252) scale(0.55)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g><g transform="translate(203 266) scale(0.55)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g><g transform="translate(258 273) scale(0.55)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g><g transform="translate(313 272) scale(0.55)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g><g transform="translate(366 261) scale(0.55)"><path d="M 0.0 -30.0 L 6.7 -9.3 L 28.5 -9.3 L 10.9 3.5 L 17.6 24.3 L 0.0 11.5 L -17.6 24.3 L -10.9 3.5 L -28.5 -9.3 L -6.7 -9.3 Z" fill="#ffffff"/></g>
+</svg>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CAHL — Broadcast Booth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Archivo+Expanded:wght@700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0a0e14; --panel:#10151d; --panel2:#161d27; --line:#232c3a;
+  --text:#eef2f7; --muted:#8b96a8; --ice:#a8c8e8;
+  --red:#ce1126; --green:#2fe08a; --amber:#ffb340;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--ink);color:var(--text);font-family:'Archivo',system-ui,sans-serif;min-height:100vh}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+/* ===== top bar ===== */
+.bar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;
+  padding:10px 16px;background:rgba(10,14,20,.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line)}
+.brand{font-weight:800;letter-spacing:.12em;font-size:14px}
+.brand b{color:var(--red)}
+.clockbox{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pdot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+.clock{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted)}
+@media(prefers-reduced-motion:reduce){.pdot{animation:none}}
+
+/* ===== tabs ===== */
+.tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:12px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--muted);
+  border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-color:var(--red)}
+
+main{max-width:1100px;margin:0 auto;padding:20px 16px 120px}
+.panel{display:none}
+.panel.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.panel.on{animation:none}}
+
+.sec-h{display:flex;align-items:baseline;gap:10px;margin:22px 0 12px}
+.sec-h h2{font-size:13px;letter-spacing:.18em;font-weight:800;color:var(--muted)}
+.sec-h .rule{flex:1;height:1px;background:var(--line)}
+.sec-h select{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  font:inherit;font-size:12px;padding:6px 8px;border-radius:6px}
+
+/* ===== marquee scoreboard ===== */
+.marquee{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,var(--panel2),var(--panel));padding:22px 18px}
+.marquee .tag{position:absolute;top:12px;left:16px;font-size:10px;letter-spacing:.22em;color:var(--red);font-weight:800}
+.mq-row{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:14px;flex-wrap:wrap}
+.mq-team{font-weight:800;font-size:clamp(16px,4.5vw,24px);letter-spacing:.02em;text-align:right;flex:1;min-width:120px}
+.mq-team.away{text-align:left}
+.mq-score{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:clamp(38px,10vw,64px);
+  line-height:1;display:flex;gap:12px;align-items:center}
+.mq-score .dash{color:var(--line)}
+.mq-meta{margin-top:14px;text-align:center;font-size:12px;color:var(--muted);letter-spacing:.08em}
+.mq-meta b{color:var(--amber)}
+.mq-bars{display:flex;gap:14px;justify-content:center;margin-top:16px}
+.mq-bar{flex:0 1 220px}
+.mq-bar .lbl{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-bottom:5px}
+.mq-bar .tr{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.mq-bar .fill{height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--red),#002654);transition:width .9s cubic-bezier(.2,.7,.3,1)}
+
+/* ===== game rows (lower-third style) ===== */
+.glist{display:flex;flex-direction:column;gap:8px}
+.g{display:grid;grid-template-columns:74px 1fr auto;align-items:center;gap:12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+  cursor:pointer;transition:transform .15s,border-color .15s,background .15s}
+.g:hover{transform:translateX(4px);border-color:#33415a;background:var(--panel2)}
+.g .when{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+.g .when .st{font-size:10px;letter-spacing:.14em;font-weight:600}
+.g .when .st.live{color:var(--red)}
+.g .when .st.final{color:var(--green)}
+.g .match{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;flex-wrap:wrap}
+.g .match .at{color:var(--line);font-weight:500}
+.g .score{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;color:var(--ice)}
+.g .score .lead{color:var(--text)}
+.g.past .when .tm{color:#5b6678}
+.g .chev{color:var(--line);font-size:12px}
+.g .expand{grid-column:1/-1;display:none;padding-top:10px;border-top:1px dashed var(--line);
+  font-size:12px;color:var(--muted);line-height:1.7}
+.g.open .expand{display:block}
+.g.open{background:var(--panel2)}
+
+/* ===== chyron ticker ===== */
+.ticker{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--panel);
+  border-top:2px solid var(--red);overflow:hidden;height:34px}
+.ticker .lane{display:flex;gap:48px;white-space:nowrap;align-items:center;height:100%;
+  animation:slide 38s linear infinite;padding-left:100%}
+@keyframes slide{to{transform:translateX(-100%)}}
+@media(prefers-reduced-motion:reduce){.ticker .lane{animation:none;padding-left:16px}}
+.tk{font-size:12px;letter-spacing:.04em;color:var(--muted)}
+.tk b{color:var(--text)}
+.tk .pts{color:var(--amber);font-family:'IBM Plex Mono',monospace}
+
+@media(max-width:640px){
+  .g{grid-template-columns:60px 1fr auto;padding:10px}
+  .mq-row{gap:10px}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <span class="brand">CAHL<b>/</b>BOOTH</span>
+  <div class="clockbox">
+    <span class="pdot" id="liveDot"></span>
+    <span class="clock" id="clock">--:--:-- ET</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab on" data-p="today">TONIGHT</button>
+  <button class="tab" data-p="leaders">LEADERS</button>
+  <button class="tab" data-p="about">BOOTH</button>
+</nav>
+
+<main>
+  <!-- TODAY -->
+  <section class="panel on" id="p-today">
+    <div class="marquee">
+      <span class="tag">● MARQUEE MATCHUP</span>
+      <div class="mq-row">
+        <div class="mq-team">Winking Lizard</div>
+        <div class="mq-score"><span id="mh">4</span><span class="dash">–</span><span id="ma">3</span></div>
+        <div class="mq-team away">Birdie Juicers</div>
+      </div>
+      <div class="mq-meta"><b>LIVE</b> · 3RD PERIOD · 10:50 PM START · CHILLER NORTH</div>
+      <div class="mq-bars">
+        <div class="mq-bar"><div class="lbl"><span>SHOTS</span><span>24 — 19</span></div><div class="tr"><div class="fill" data-w="56%"></div></div></div>
+        <div class="mq-bar"><div class="lbl"><span>FACEOFF %</span><span>51 — 49</span></div><div class="tr"><div class="fill" data-w="51%"></div></div></div>
+        <div class="mq-bar"><div class="lbl"><span>PIM</span><span>6 — 12</span></div><div class="tr"><div class="fill" data-w="33%"></div></div></div>
+      </div>
+    </div>
+
+    <div class="sec-h"><h2>TONIGHT'S SLATE</h2><div class="rule"></div>
+      <select id="fScope"><option value="all">All 15 games</option><option value="live">Live only</option><option value="upcoming">Upcoming</option></select>
+    </div>
+    <div class="glist" id="glist"></div>
+  </section>
+
+  <!-- LEADERS -->
+  <section class="panel" id="p-leaders">
+    <div class="sec-h"><h2>TONIGHT'S POINTS CHYRON</h2><div class="rule"></div></div>
+    <div class="glist" id="lboard"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="panel" id="p-about">
+    <div class="sec-h"><h2>FROM THE BOOTH</h2><div class="rule"></div></div>
+    <p style="color:var(--muted);font-size:14px;line-height:1.8;max-width:60ch">
+      Direction 01 — Broadcast-Booth. The dashboard as a Wednesday-night telecast:
+      sticky period clock, marquee scoreboard with stat bars, every game a broadcast
+      lower-third, and a persistent chyron ticker carrying the night's stat lines.
+      Concepts 02–10 from the design swarm sit alongside this one in the gallery.
+    </p>
+  </section>
+</main>
+
+<div class="ticker"><div class="lane" id="lane"></div></div>
+
+<script>
+const GAMES=[
+ {t:"8:40 PM",h:"Cyclones",a:"Goalie Guacamole"},
+ {t:"9:40 PM",h:"Parking Lot Beers",a:"Triple D"},
+ {t:"9:50 PM",h:"Dayton Hawks",a:"Dayton Fire"},
+ {t:"9:50 PM",h:"C Black Pizza (Saucy)",a:"Carlucci's Pizza Red"},
+ {t:"10:00 PM",h:"Busch League",a:"Brew Jackets"},
+ {t:"10:00 PM",h:"The Beer Barrel Boys",a:"Gang Green"},
+ {t:"10:00 PM",h:"Goose Eggs",a:"The Scorners"},
+ {t:"10:00 PM",h:"Whiskey Warriors",a:"Vandelay Industries"},
+ {t:"10:05 PM",h:"Cyclops",a:"Goodfellas"},
+ {t:"10:30 PM",h:"Shakers Raw Dogs",a:"The Chicken Selects"},
+ {t:"10:30 PM",h:"Bu-Hockkey BT5",a:"T5P Hockey"},
+ {t:"10:50 PM",h:"Winking Lizard",a:"Birdie Juicers",live:[4,3]},
+ {t:"11:00 PM",h:"Puck Buddies",a:"The tip in"},
+ {t:"11:10 PM",h:"Brewins",a:"The Wobbly Pirates",live:[2,2]},
+ {t:"11:10 PM",h:"CockTails and Dreams",a:"Goal Train"},
+];
+const LEADERS=[
+ {n:"William Vonderahe",tm:"Black and Tan",p:5,g:0,a:5},
+ {n:"Brandon Spickler",tm:"Hamilton Mustangs (Thu)",p:4,g:2,a:2},
+ {n:"Will Wuotila",tm:"Fluffers",p:4,g:2,a:2},
+ {n:"John Kemp",tm:"Black and Tan",p:3,g:3,a:0},
+ {n:"Matthew Brancaleone",tm:"Hamilton Mustangs (Thu)",p:2,g:1,a:1},
+];
+let filter="all";
+function status(g){return g.live?"live":(g.t<"10:50 PM"?"final":"upcoming")}
+function render(){
+  const el=document.getElementById("glist");
+  el.innerHTML=GAMES.map((g,i)=>{
+    const st=status(g);
+    if(filter==="live"&&st!=="live")return"";
+    if(filter==="upcoming"&&st==="final")return"";
+    const when=st==="live"?`<div class="st live">● LIVE</div>`:st==="final"?`<div class="st final">FINAL</div>`:`<div class="st" style="color:var(--muted)">${g.t}</div>`;
+    const score=st==="live"?`<div class="score"><span class="lead">${g.live[0]}</span>–<span class="lead">${g.live[1]}</span></div>`
+      :st==="final"?`<div class="score" style="color:var(--muted)">F</div>`:`<span class="chev">▸</span>`;
+    return `<div class="g ${st}" data-i="${i}">
+      <div class="when"><div class="tm">${g.t}</div>${when}</div>
+      <div class="match"><span>${g.h}</span><span class="at">vs</span><span>${g.a}</span></div>
+      ${score}
+      <div class="expand">${st==="live"?`Period 3 · 11:42 remaining · Shots ${12+i%9}–${8+i%7} · PIM ${i%2?"4":"8"}–${i%3?"10":"2"}`:`${st==="final"?"Final score sheet + player points will link here.":"Matchup preview, head-to-head history and roster links will live here."}`}</div>
+    </div>`;
+  }).join("")||`<p style="color:var(--muted);font-size:13px;padding:8px">Nothing in this filter right now.</p>`;
+  el.querySelectorAll(".g").forEach(r=>r.addEventListener("click",()=>r.classList.toggle("open")));
+}
+function renderLeaders(){
+  document.getElementById("lboard").innerHTML=LEADERS.map((l,i)=>`
+    <div class="g" style="cursor:default">
+      <div class="when"><div class="tm" style="color:var(--amber);font-weight:700">#${i+1}</div><div class="st" style="color:var(--muted)">${l.p} PTS</div></div>
+      <div class="match"><span>${l.n}</span><span class="at">·</span><span style="color:var(--muted)">${l.tm}</span></div>
+      <div class="score" style="font-size:13px">${l.g}G — ${l.a}A</div>
+    </div>`).join("");
+}
+function renderTicker(){
+  document.getElementById("lane").innerHTML=LEADERS.map(l=>`<span class="tk">▲ <b>${l.n}</b> (${l.tm}) <span class="pts">${l.p} PTS</span></span>`).join("")
+   +`<span class="tk">● LIVE — <b>Winking Lizard 4</b>, Birdie Juicers 3 (3rd)</span>`
+   +`<span class="tk">15 GAMES TONIGHT ACROSS THE CHILLER</span>`;
+}
+document.getElementById("tabs").addEventListener("click",e=>{
+  const b=e.target.closest(".tab");if(!b)return;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t===b));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+});
+document.getElementById("fScope").addEventListener("change",e=>{filter=e.target.value;render()});
+setInterval(()=>{
+  const d=new Date(Date.now()-4*3600e3);
+  document.getElementById("clock").textContent=d.toISOString().slice(11,19)+" ET";
+},1000);
+render();renderLeaders();renderTicker();
+requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  document.querySelectorAll(".fill").forEach(f=>f.style.width=f.dataset.w);
+}));
+</script>
+</body>
+</html>

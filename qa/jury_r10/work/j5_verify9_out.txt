@@ -1,0 +1,64 @@
+=== shell: live-pill / pal-ov / refresh ===
+  shell L124: <div id="kpalOv" class="pal-ov" aria-hidden="true">
+  shell L168: <button id="refreshBtn" class="ghost small" title="Refresh latest scores and stats" aria-label="Refresh latest scores and stats">Refresh</button>
+  shell L169: <label id="livePill" class="live-pill" title="Live status — click to toggle 30s auto-refresh (state shows on the pill)">
+  shell L170: <input type="checkbox" id="autoToggle" class="sr-only" aria-label="Toggle live auto-refresh" checked />
+  shell L171: <span class="live-pill-dot" aria-hidden="true"></span>
+  shell L172: <span id="livePillLabel" class="live-pill-label" aria-live="polite">NO GAMES LIVE</span>
+=== app.js: has-live toggling ===
+  L984: document.body.classList.toggle('has-live', anyLive);
+=== app.js: pal-ov class list / open toggling ===
+  L450: box.classList.remove('open');
+  L481: box.classList.add('open');
+  L506: box.classList.remove('open');
+  L538: box.classList.add('open');
+  L557: boxNow.classList.add('open');
+  L2943: ov: document.getElementById('kpalOv'),
+  L3106: kpal.ov.classList.add('open');
+  L3116: kpal.ov.classList.remove('open');
+=== app.py L326-345 + L470-490 (supabase layer) ===
+326: _TEAMS_SNAPSHOT = "/tmp/cahl_teams_index.json"
+327: 
+328: # ---- Supabase persistent store (cross-instance, survives cold boots) ----
+329: # PostgREST direct over HTTPS — no SDK dependency. Feature-flagged: inert
+330: # unless SUPABASE_URL + SUPABASE_SERVICE_KEY are set in the environment.
+331: # Table: cahl_cache(key text pk, payload jsonb, updated_at timestamptz).
+332: import urllib.request as _ureq
+333: 
+334: 
+335: def _sb_config():
+336:     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+337:     key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+338:     return (url, key) if url and key else (None, None)
+339: 
+340: 
+341: def _sb_read(key, timeout=8):
+342:     """Fetch a cached payload from Supabase. Returns (data, ok)."""
+343:     url, key_env = _sb_config()
+344:     if not url:
+345:         return None, False
+346:     try:
+347:         req = _ureq.Request(
+348:             f"{url}/rest/v1/cahl_cache?select=payload,updated_at&key=eq.{key}",
+   ...
+470:         return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False})
+471: 
+472:     # Cold instance: hydrate from Supabase (cross-instance, always fresh) or
+473:     # the local on-disk snapshot, before fanning out to ~60 rosters. Turns most
+474:     # cold starts from 30-60s into well under a second.
+475:     if _PLAYERS_CACHE["data"] is None:
+476:         sb, ok = _sb_read("players_index")
+477:         if ok and isinstance(sb.get("players"), list) and sb["players"]:
+478:             _PLAYERS_CACHE["data"] = sb["players"]
+479:             _PLAYERS_CACHE["ts"] = now
+480:             _PLAYERS_CACHE["partial"] = False
+481:             return jsonify({"players": sb["players"], "partial": False,
+482:                             "from_supabase": True})
+483:         if _players_snapshot_load():
+484:             return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False,
+485:                             "from_snapshot": True})
+486: 
+487:     # Single-flight: one rebuild at a time; concurrent requests wait for the
+488:     # in-flight rebuild instead of each fanning out to ~60 rosters (the
+489:     # stampede is what made the leaderboard stick for everyone at once).
+490:     with _PLAYERS_COND:

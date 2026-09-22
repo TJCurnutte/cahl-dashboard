@@ -1,0 +1,156 @@
+=== 1. UNCONDITIONAL leader rows (R9-A headliner) ===
+unconditional '<tr class=link onclick=selectPlayer' sites: 0
+=== 2. Conditional guarded row sites ===
+conditional selectPlayer row sites: 6
+  L282: `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id || ''}','${p.player_id}')\" class=\"link\"` : ''}><td class="num">${p.ra
+  L702: <tr ${p.token ? `onclick=\"selectPlayerToken('${p.token}')\" class=\"link\"` : ''}>
+  L1576: html += data.leaders.points.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\
+  L1579: html += data.leaders.goals.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link\"
+  L1582: html += data.leaders.assists.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class=\"link
+  L2521: html += (leaders.points || []).map((p, i) => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id}')\" class
+ALL selectPlayer references: 5
+  L282: `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id || ''}','${p.player_id}')\" class=\"link\"` : ''}><t
+  L1576: html += data.leaders.points.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_i
+  L1579: html += data.leaders.goals.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_id
+  L1582: html += data.leaders.assists.map(p => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.player_
+  L2521: html += (leaders.points || []).map((p, i) => `<tr ${p.player_id ? `onclick=\"selectPlayer('${p.team_id}','${p.
+=== 3. leaderSection / Analytics / League renderer check ===
+  leaderSection: lines [279, 2318, 2319, 2320, 2321, 2329, 2330, 2331]
+  Top Scorers: lines [1907, 1909, 2520]
+  loadLeagueContent: lines [1402, 1461, 1464, 2761]
+  loadAnalyticsContent: lines [2453, 2456]
+=== 4. landing.css font-size literals (R9 fix #2) ===
+literal px font-sizes: 15 distinct=['13', '14', '16', '20', '26', '30', '34'] counts={'16': 4, '34': 1, '20': 1, '26': 2, '14': 4, '13': 2, '30': 1}
+var() font-sizes: 6
+v67 landing literal px: 16 distinct=['11', '12.5', '13.5', '14', '15', '16', '17', '19', '26', '27', '32', '44']
+=== 5. backdrop-filter census ===
+  landing.css: 1
+    L43: background: var(--bg); /* R9-4: nav blur removed — backdrop-filter budget stays with the app */
+  style.css: 1
+    L765: backdrop-filter: blur(3px);
+=== 6. sponsor mark ===
+  app.js upright-crown: []
+  app.js upright-lockup: [1239]
+  shell: [105]
+=== 7. inline-styled h3 + inline style census ===
+inline-styled h3: 5
+  L284: return `<h3 style="margin-top:16px">${title}</h3><table><thead><tr><th>#</th><th>Player</t
+  L1491: let html = `<h3 style="margin:18px 0 10px;color:var(--text)">${data.league_name} <span sty
+  L1578: html += '<h3 style="margin-top:14px">Goals</h3><table><thead><tr><th>Player</th><th>Team</
+  L1581: html += '<h3 style="margin-top:14px">Assists</h3><table><thead><tr><th>Player</th><th>Team
+  L2041: <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
+inline style= total in app.js: 0
+onclick= total in app.js: 28
+=== 8. dataStamp ticking (R9 verified carry) ===
+  L2919: const paintStamp = () => {
+  L2922: paintStamp();
+  L2923: setInterval(paintStamp, 60000);
+=== 9. Supabase persistence (NEW v70) ===
+supabase refs: 0
+=== 10. dead-team self-heal ===
+refs: 7
+  L51: teamId: localStorage.getItem('cahl-team') || '',
+  L53: myTeam: localStorage.getItem('cahl-myteam') || localStorage.getItem('cahl-team') || '',
+  L401: localStorage.setItem('cahl-team', teamId);
+  L1960: localStorage.setItem('cahl-team', state.teamId);
+  L2003: const dead = /no longer available/i.test(String(data.error));
+  L2006: localStorage.removeItem('cahl-team');
+  L2577: localStorage.setItem('cahl-team', teamId);
+=== 11. esc( on error interpolations ===
+UNescaped data.error/e.message interpolation sites: 13
+  L313: state.teamsError = (data && data.error) ? data.error : 'No teams returned';
+  L350: state.playersError = (data && data.error) ? data.error : 'No players returned';
+  L385: error: data && data.error ? data.error : null,
+  L1050: if (e && /call stack|recursion/i.test(String(e.message))) reportClientError(e);
+  L1252: if (data.error || !data.games) return;
+  L1314: if (data.error) { el.remove(); return; }
+  L1614: if (data.error) throw new Error(data.error);
+  L1940: if (!data || data.error || !Array.isArray(data.standings)) {
+  L1999: if (data.error) {
+  L2003: const dead = /no longer available/i.test(String(data.error));
+  L2282: if (data.error && !(data.previous && data.previous.length) && !(data.awards && data.awards.length)) {
+  L2404: if (data.error || !data.games || !data.games.length) return;
+  L2596: if (data.error) { showToast('Could not load team'); return; }
+=== 12. keyframes + RM ===
+style.css keyframes (10): ['live-breathe', 'live-dot-pulse', 'score-flash', 'pal-fade', 'pal-pop', 'shimmer', 'spin', 'fade-in', 'hero-next-pulse', 'rise-in']
+landing.css keyframes (0): []
+style.css RM blocks at: [1216, 1296, 1402, 1607]
+landing.css RM blocks at: [216]
+=== 13. versions ===
+shell APP_VERSION: 70
+app.js JS_VERSION: 70
+=== 14. app.js diff v67 -> v70 (hunk map) ===
+hunks: 7
+  @@ -31,3 +31,3 @@
+  @@ -281,3 +281,3 @@
+  @@ -701,11 +701,11 @@
+  @@ -1238,3 +1238,3 @@
+  @@ -2185,4 +2185,4 @@
+  @@ -2207,3 +2207,3 @@
+  @@ -2520,3 +2520,3 @@
+=== 15. landing.css diff v67 -> v70 ===
+hunks: 18
+--- 
++++ 
+@@ -43,3 +43 @@
+-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+-  backdrop-filter: blur(10px);
+-  -webkit-backdrop-filter: blur(10px);
++  background: var(--bg); /* R9-4: nav blur removed — backdrop-filter budget stays with the app */
+@@ -59 +57 @@
+-.lp-cta-sm { min-height: 42px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
++.lp-cta-sm { min-height: 44px; padding: 0 18px; font-size: 16px; border-radius: 10px; }
+@@ -76 +74 @@
+-  font-size: 44px; font-weight: 800; line-height: 1.05;
++  font-size: 34px; font-weight: 800; line-height: 1.05;
+@@ -83 +81 @@
+-  color: var(--muted); font-size: 17px; line-height: 1.65;
++  color: var(--muted); font-size: 16px; line-height: 1.65;
+@@ -97 +95 @@
+-  font-size: 19px; font-weight: 700; letter-spacing: 0.04em;
++  font-size: 20px; font-weight: 700; letter-spacing: 0.04em;
+@@ -99 +97 @@
+-  background: var(--union-cta, #1f6cb8);
++  background: var(--union-cta);
+@@ -105 +103 @@
+-.gate-cta:hover { transform: translateY(-1px); background: var(--union-hover, #3a8fe0); }
++.gate-cta:hover { transform: translateY(-1px); background: var(--union-hover); }
+@@ -132,2 +130,2 @@
+-  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+-  color: var(--sponsor-gold, #b8925e);
++  font-family: var(--mono); font-size: var(--mono-sm); font-weight: 600; letter-spacing: 0.1em;
++  color: var(--sponsor-gold);
+@@ -142 +140 @@
+-  font-family: var(--display); font-size: 17px; font-weight: 700;
++  font-family: var(--display); font-size: 16px; font-weight: 700;
+@@ -145 +143 @@
+-.lp-feature p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
++.lp-feature p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+@@ -148 +146 @@
+-.lp-about p { max-width: 68ch; margin: 0 auto 14px; color: var(--muted); font-size: 15px; line-height: 1.7; }
++.lp-about p { max-width: 68ch; margin: 0 auto 14px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+@@ -150 +148 @@
+-  color: var(--faint); font-size: 12.5px; font-family: var(--mono);
++  color: var(--faint); font-size: 13px; font-family: var(--mono);
+@@ -169,2 +167,2 @@
+-.lp-sponsor-blurb { display: block; margin: 6px 0 8px; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+-.lp-sponsor-link, .lp-sponsor-copy .sponsor-kicker { display: block; font-family: var(--mono); font-size: var(--mono-sm); font-weight: 600; letter-spacing: 0.06em; color: var(--sponsor-gold, #b8925e); }
++.lp-sponsor-blurb { display: block; margin: 6px 0 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
++.lp-sponsor-link, .lp-sponsor-copy .sponsor-kicker { display: block; font-family: var(--mono); font-size: var(--mono-sm); font-weight: 600; letter-spacing: 0.06em; color: var(--sponsor-gold); }
+@@ -176 +174 @@
+-.lp-fine { margin: 18px 0 0; color: var(--faint); font-size: 12.5px; font-family: var(--mono); letter-spacing: 0.04em; }
++.lp-fine { margin: 18px 0 0; color: var(--faint); font-size: 13px; font-family: var(--mono); letter-spacing: 0.04em; }
+@@ -192 +190 @@
+-.sponsor-strip img { height: 22px; width: auto; display: block; }
++.sponsor-strip img { height: 20px; width: auto; max-width: 150px; object-fit: contain; display: block; }
+@@ -202 +200 @@
+-.sponsor-strip:hover .sponsor-strip-text { color: var(--sponsor-gold, #b8925e); }
++.sponsor-strip:hover .sponsor-strip-text { color: var(--sponsor-gold); }
+@@ -207 +205 @@
+-  .lp-title { font-size: 32px; }
++  .lp-title { font-size: 30px; }
+@@ -214,2 +212,2 @@
+-  .lp-title { font-size: 27px; }
+-  .gate-cta { min-height: 50px; padding: 0 26px; font-size: 17px; }
++  .lp-title { font-size: 26px; }
++  .gate-cta { min-height: 50px; padding: 0 26px; font-size: 16px; }

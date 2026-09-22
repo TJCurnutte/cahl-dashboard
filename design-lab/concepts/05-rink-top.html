@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#04182b">
+<title>CAHL — Rink-Top</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ice-0:#04182b;      /* deep base */
+  --ice-1:#062640;      /* ice surface */
+  --ice-2:#0a3357;      /* crease wash */
+  --line-blue:#1a5595;  /* blue line */
+  --line-red:#CE1126;   /* red line */
+  --faceoff:#A2AAAD;    /* circles + hairlines */
+  --ink:#eef3f8;
+  --ink-dim:#8fa3bd;
+  --ink-faint:#566a82;
+  --puck:#0b0e12;
+  --puck-edge:#333c48;
+  --live:#CE1126;
+  --live-dim:#b1505c;
+  --final:#566a82;
+  --gold:#A2AAAD;
+  --trail:#c9cfd6;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:'Archivo',system-ui,sans-serif;
+  background:var(--ice-0);
+  color:var(--ink);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+/* ============ RINK SURFACE ============ */
+.rink{
+  position:relative;
+  min-height:100vh;
+  background:
+    radial-gradient(1100px 480px at 50% -6%, rgba(26,85,149,.20), transparent 62%),
+    radial-gradient(900px 420px at 50% 108%, rgba(10,51,87,.5), transparent 65%),
+    linear-gradient(180deg, var(--ice-1), var(--ice-0) 58%);
+}
+/* ice texture: faint scratch/noise layers */
+.rink::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    repeating-linear-gradient(103deg, rgba(255,255,255,.022) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(80deg, rgba(255,255,255,.015) 0 1px, transparent 1px 11px),
+    repeating-linear-gradient(91deg, rgba(140,180,210,.03) 0 1px, transparent 1px 17px);
+}
+/* rink markings: blue lines, red center line, faceoff dots */
+.rinklines{position:absolute;inset:0;pointer-events:none;z-index:0}
+.rinklines .bl{position:absolute;top:0;bottom:0;width:12px;
+  background:linear-gradient(90deg,rgba(26,85,149,0),rgba(26,85,149,.40) 40%,rgba(26,85,149,.40) 60%,rgba(26,85,149,0))}
+.rinklines .bl.left{left:15%}
+.rinklines .bl.right{right:15%}
+.rinklines .rl{position:absolute;top:0;bottom:0;left:50%;width:16px;transform:translateX(-50%);
+  background:linear-gradient(90deg,transparent,rgba(206,17,38,.34) 35%,rgba(206,17,38,.34) 65%,transparent)}
+.rinklines .cdot{position:absolute;top:0;bottom:0;left:50%;width:2px;transform:translateX(-50%);background:rgba(234,244,251,.05)}
+.rinklines .fo{position:absolute;border:1.5px solid rgba(162,170,173,.18);border-radius:50%;width:110px;height:110px;transform:translate(-50%,-50%)}
+.rinklines .fo::before{content:'';position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:50%;background:rgba(162,170,173,.24);transform:translate(-50%,-50%)}
+.rinklines .fo.d1{left:22%;top:24%}
+.rinklines .fo.d2{left:22%;top:76%}
+.rinklines .fo.d3{left:78%;top:24%}
+.rinklines .fo.d4{left:78%;top:76%}
+/* side boards at the viewport edges */
+.rink::after{
+  content:'';position:fixed;top:0;bottom:0;left:0;right:0;pointer-events:none;z-index:1;
+  border-left:6px solid rgba(200,214,226,.10);
+  border-right:6px solid rgba(200,214,226,.10);
+}
+
+/* ============ TOP BAR ============ */
+.topbar{
+  position:relative;z-index:5;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:13px 20px;
+  border-bottom:1px solid rgba(162,170,173,.16);
+  background:rgba(4,24,43,.72);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.06em;font-size:15px}
+.brand .disc{width:32px;height:32px;border-radius:50%;background:conic-gradient(from 210deg,#0b0e12,#262e38,#0b0e12);border:2px solid #454e5a;position:relative;flex:0 0 auto}
+.brand .disc::after{content:'CAHL';position:absolute;inset:0;display:grid;place-items:center;font-size:7px;font-weight:800;color:#cfd8e3;letter-spacing:.14em}
+.brand em{font-style:normal;color:var(--ink-dim);font-weight:500}
+.datestamp{font-size:12px;color:var(--ink-dim)}
+.datestamp b{color:var(--ink)}
+.topbar .spacer{flex:1}
+.clockbox{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-dim);font-family:'IBM Plex Mono',monospace}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--live);box-shadow:0 0 0 0 rgba(206,17,38,.5);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(206,17,38,0)}100%{box-shadow:0 0 0 0 rgba(206,17,38,0)}}
+
+/* ============ CONTROLS ============ */
+.controls{
+  position:relative;z-index:4;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  padding:12px 20px 2px;
+}
+.chip{
+  appearance:none;border:1px solid rgba(162,170,173,.3);
+  background:rgba(6,38,64,.65);
+  color:var(--ink-dim);font:inherit;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+  padding:7px 13px;border-radius:999px;cursor:pointer;
+  transition:border-color .18s,color .18s,background .18s,transform .12s;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.chip:hover{border-color:var(--faceoff);color:var(--ink)}
+.chip:active{transform:scale(.96)}
+.chip.on{background:var(--faceoff);border-color:var(--faceoff);color:#062640}
+.chip .n{font-size:10px;opacity:.7;font-family:'IBM Plex Mono',monospace}
+.chip.live-chip.on{background:var(--live);border-color:var(--live);color:#fff}
+.chip.live-chip .dotled{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.25}}
+
+/* ============ LAYOUT ============ */
+.board{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,1fr) 296px;align-items:start}
+.ice-main{padding:4px 22px 56px;min-width:0}
+/* the boards (right rail) */
+.rail{
+  position:relative;z-index:2;
+  border-left:1px solid rgba(162,170,173,.22);
+  background:
+    repeating-linear-gradient(0deg, rgba(162,170,173,.05) 0 2px, transparent 2px 44px),
+    linear-gradient(180deg, rgba(6,38,64,.72), rgba(4,24,43,.78));
+  padding:20px 18px 44px;
+}
+.rail::before{ /* kickplate */
+  content:'';position:absolute;left:0;top:0;bottom:0;width:6px;
+  background:repeating-linear-gradient(180deg,#c8d6e2 0 10px,#9fb4c6 10px 20px);
+  opacity:.30;
+}
+.rail h3{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--ink-dim);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.rail h3 .tag{font-size:9px;padding:2px 7px;border-radius:99px;background:rgba(162,170,173,.14);color:var(--faceoff);letter-spacing:.1em}
+
+/* ============ CENTER ICE: NOW MODULE ============ */
+.centerice{position:relative;margin:10px auto 22px;max-width:560px;text-align:center}
+.ci-rings{position:relative;width:206px;height:206px;margin:0 auto}
+.ci-rings .ring{position:absolute;inset:0;border:1.5px solid rgba(162,170,173,.30);border-radius:50%}
+.ci-rings .ring.r2{inset:22px;border-color:rgba(162,170,173,.16)}
+.ci-rings .ring.r3{inset:50px;border-style:dashed;border-color:rgba(206,17,38,.32)}
+.ci-dot{
+  position:absolute;left:50%;top:50%;width:58px;height:58px;border-radius:50%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 32% 28%, #2a323d, #0b0e12 62%);
+  border:2px solid #4a5462;
+  display:grid;place-items:center;
+  box-shadow:0 6px 18px rgba(0,0,0,.45), 0 0 0 6px rgba(162,170,173,.07);
+}
+.ci-dot .lbl{font-size:8px;letter-spacing:.16em;color:#aeb9c6;font-weight:800}
+.ci-meta{margin-top:10px}
+.ci-meta .k{font-size:10px;letter-spacing:.18em;color:var(--ink-dim);font-weight:800}
+.ci-meta .big{
+  font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:34px;letter-spacing:.02em;
+  margin:3px 0 2px;font-variant-numeric:tabular-nums;
+}
+.ci-meta .vs{font-size:13px;color:var(--ink-dim);font-weight:500}
+.ci-meta .vs b{color:var(--ink);font-weight:700}
+.ci-meta .where{font-size:11px;color:var(--ink-faint);margin-top:3px}
+.ci-scoreline{display:flex;justify-content:center;gap:10px;margin-top:9px}
+.ci-scoreline .sq{min-width:46px;padding:5px 9px;border:1px solid rgba(162,170,173,.25);border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;background:rgba(4,24,43,.5);color:var(--ink)}
+.ci-scoreline .sq.hot{color:var(--live);border-color:rgba(206,17,38,.45)}
+.flash-num{animation:flashnum .55s}
+@keyframes flashnum{0%{color:var(--gold);transform:scale(1.16)}100%{transform:scale(1)}}
+
+/* ============ ICE LANES ============ */
+.lanes-head{display:flex;align-items:baseline;gap:12px;margin:4px 0 16px}
+.lanes-head h2{font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--ink-dim)}
+.lanes-head .rule{flex:1;height:1px;background:linear-gradient(90deg,rgba(162,170,173,.3),transparent)}
+.lanes-head .cnt{font-size:11px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace}
+.lanes{display:grid;grid-template-columns:repeat(4,minmax(168px,1fr));gap:14px;position:relative}
+.lane{
+  position:relative;border-radius:14px;
+  padding:14px 8px 8px;min-height:220px;
+  background:linear-gradient(180deg, rgba(10,51,87,.30), rgba(4,24,43,.16));
+  border:1px solid rgba(162,170,173,.10);
+  transition:background .25s,border-color .25s,box-shadow .25s,opacity .25s;
+}
+.lane::before{ /* lane plate on the boards */
+  content:attr(data-lane);
+  position:absolute;top:-9px;left:14px;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.18em;
+  color:var(--ink-faint);background:var(--ice-0);padding:1px 7px;
+  border:1px solid rgba(162,170,173,.16);border-radius:99px;
+  transition:color .25s;
+}
+.lane.focus{
+  background:linear-gradient(180deg, rgba(10,51,87,.48), rgba(6,38,64,.28));
+  border-color:rgba(162,170,173,.36);
+  box-shadow:0 0 0 1px rgba(162,170,173,.12), 0 14px 34px -20px rgba(162,170,173,.4);
+}
+.lane.focus::before{color:var(--faceoff)}
+.lane.dim{opacity:.42;filter:saturate(.55)}
+.lane .lane-foot{display:flex;justify-content:center;margin-top:9px}
+.addy{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--ink-faint);opacity:.75;transition:color .2s,opacity .2s}
+.lane.focus .addy{opacity:1;color:var(--faceoff)}
+
+/* ============ PUCK CARDS ============ */
+.puck{
+  position:relative;
+  display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;
+  padding:11px 12px;margin-bottom:10px;border-radius:18px;
+  background:radial-gradient(circle at 30% 24%, #232a33, #0b0e12 58%);
+  border:1px solid var(--puck-edge);
+  cursor:pointer;user-select:none;-webkit-user-select:none;
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1),border-color .2s,box-shadow .25s;
+  will-change:transform;
+  box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.puck:hover{transform:translate(3px,-3px) scale(1.03);border-color:var(--faceoff);z-index:3;box-shadow:0 10px 26px rgba(0,0,0,.5), 0 0 0 1px rgba(162,170,173,.25)}
+.puck:active{transform:translate(3px,-3px) scale(.97)}
+.puck .time{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--faceoff);
+  writing-mode:vertical-rl;transform:rotate(180deg);
+  align-self:stretch;display:flex;align-items:center;justify-content:center;
+  border-right:1px dashed rgba(162,170,173,.22);padding-right:7px;letter-spacing:.04em;
+}
+.puck.live .time{color:var(--live);border-right-color:rgba(206,17,38,.4)}
+.puck .mid{min-width:0}
+.puck .team{display:flex;align-items:baseline;gap:8px;min-width:0}
+.puck .team + .team{margin-top:3px}
+.puck .tname{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.puck .tscore{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--ink-dim);min-width:15px;text-align:right}
+.puck.live .tscore{color:var(--ink)}
+.puck .tscore.lead{color:var(--gold)}
+.puck .meta{display:flex;align-items:center;gap:8px;margin-top:7px}
+.puck .status{font-size:9px;font-weight:800;letter-spacing:.14em;padding:2.5px 8px;border-radius:99px;border:1px solid rgba(162,170,173,.25);color:var(--ink-dim);white-space:nowrap}
+.puck.live .status{background:var(--live);border-color:var(--live);color:#fff;display:inline-flex;align-items:center;gap:5px}
+.puck.live .status::before{content:'';width:5px;height:5px;border-radius:50%;background:#fff;animation:blink 1.4s infinite}
+.puck.final .status{border-color:rgba(93,127,150,.5);color:var(--final)}
+.puck .fac{font-size:9.5px;color:var(--ink-faint);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.puck.live .fac{color:var(--live-dim)}
+/* drifting puck-dot on live cards */
+.puck .drift{
+  position:absolute;right:9px;bottom:6px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #46505e, #05070a 65%);
+  border:1px solid #525d6c;opacity:0;pointer-events:none;
+}
+.puck.live .drift{opacity:.9;animation:drift 14s ease-in-out infinite alternate}
+@keyframes drift{
+  0%{transform:translate(0,0)}
+  30%{transform:translate(-52px,-8px)}
+  55%{transform:translate(-14px,4px)}
+  80%{transform:translate(-62px,6px)}
+  100%{transform:translate(0,0)}
+}
+.puck .bump{display:inline-block}
+.puck .bump.hit{animation:flashnum .55s}
+
+/* ============ SKATE TRAIL CANVAS (fine pointers only) ============ */
+#trailCanvas{position:fixed;inset:0;pointer-events:none;z-index:60;mix-blend-mode:screen}
+@media (hover:none),(pointer:coarse){#trailCanvas{display:none}}
+
+/* ============ BOARDS: LEADERS ============ */
+.tab-mini{display:flex;gap:4px;margin-bottom:10px}
+.tab-mini button{
+  flex:1;appearance:none;border:1px solid rgba(162,170,173,.25);
+  background:transparent;color:var(--ink-faint);font:inherit;font-size:10px;font-weight:800;letter-spacing:.12em;
+  padding:5px 0;border-radius:8px;cursor:pointer;transition:all .15s;
+}
+.tab-mini button:hover{color:var(--ink)}
+.tab-mini button.on{background:rgba(162,170,173,.16);border-color:rgba(162,170,173,.4);color:var(--ink)}
+.pts-row{
+  display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center;
+  padding:8px 10px;border-radius:12px;margin-bottom:6px;
+  background:rgba(4,24,43,.42);border:1px solid transparent;
+  transition:background .2s,border-color .2s,transform .18s;
+}
+.pts-row:hover{background:rgba(10,51,87,.42);border-color:rgba(162,170,173,.25);transform:translateX(2px)}
+.pts-row .rk{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-faint);font-weight:600}
+.pts-row.top .rk{color:var(--gold)}
+.pts-row .who{min-width:0}
+.pts-row .pn{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pts-row .tn{font-size:10px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pts-row .pv{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;color:var(--faceoff)}
+.pts-row.top .pv{color:var(--gold)}
+.statbar{grid-column:1 / -1;height:3px;border-radius:2px;background:rgba(162,170,173,.14);overflow:hidden}
+.statbar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--line-blue),var(--faceoff))}
+.pts-row.top .statbar i{background:linear-gradient(90deg,#6e7684,var(--gold))}
+.rail-sep{height:1px;background:rgba(162,170,173,.16);margin:18px 0}
+.rink-line{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:4px 2px;color:var(--ink-dim)}
+.rink-line b{font-family:'IBM Plex Mono',monospace;color:var(--ink);font-weight:600}
+.rink-line .liveflag{color:var(--live);font-weight:800;font-size:9px;letter-spacing:.1em}
+.foot-note{font-size:10px;color:var(--ink-faint);line-height:1.65;margin-top:14px}
+.foot-note b{color:var(--ink-dim)}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:1080px){
+  .board{grid-template-columns:1fr}
+  .rail{border-left:0;border-top:1px solid rgba(162,170,173,.22)}
+  .rail::before{width:100%;height:6px;bottom:auto;left:0;right:0;
+    background:repeating-linear-gradient(90deg,#c8d6e2 0 10px,#9fb4c6 10px 20px)}
+  .lanes{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:640px){
+  .topbar{padding:12px 14px}
+  .controls{padding:10px 14px 2px}
+  .ice-main{padding:2px 12px 40px}
+  .lanes{display:block}
+  .lane{background:none;border:0;border-radius:0;padding:4px 0 2px;min-height:0;margin-bottom:10px}
+  .lane::before{position:static;display:inline-block;margin:0 0 8px 2px}
+  .lane .lane-foot{display:none}
+  .lane.focus{background:none;border-color:transparent;box-shadow:none}
+  .lane.focus::before{color:var(--faceoff)}
+  .lane.dim{opacity:1;filter:none}
+  .lane.dim::before{opacity:.4}
+  .puck{padding:11px 11px;margin-bottom:8px}
+  .puck .time{writing-mode:horizontal-tb;transform:none;align-self:center;border-right:0;padding:0;
+    border-left:2px solid rgba(162,170,173,.3);padding-left:8px;min-width:54px;text-align:left}
+  .puck.live .time{border-left-color:var(--live)}
+  .centerice{margin:4px auto 16px}
+  .ci-rings{width:164px;height:164px}
+  .ci-rings .ring.r3{inset:38px}
+  .ci-dot{width:46px;height:46px}
+  .ci-meta .big{font-size:27px}
+  .rinklines .fo{display:none}
+  .rinklines .bl.left{left:8px;width:6px}
+  .rinklines .bl.right{right:8px;width:6px}
+  .rinklines .rl{width:8px}
+}
+@media (max-width:400px){
+  .datestamp{display:none}
+}
+
+/* ============ REDUCED MOTION ============ */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
+  .puck:hover{transform:none}
+  .puck .drift{animation:none;opacity:.5;transform:none}
+  #trailCanvas{display:none !important}
+  .pulse{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="rink">
+  <div class="rinklines" aria-hidden="true">
+    <div class="bl left"></div><div class="bl right"></div>
+    <div class="rl"></div><div class="cdot"></div>
+    <div class="fo d1"></div><div class="fo d2"></div><div class="fo d3"></div><div class="fo d4"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand"><span class="disc"></span>CAHL <em>/ rink-top</em></div>
+    <div class="datestamp">Tuesday · <b>TONIGHT</b> · 15 games · 5 rinks</div>
+    <div class="spacer"></div>
+    <div class="clockbox"><span class="pulse" aria-hidden="true"></span><span id="etClock">--:--:-- ET</span></div>
+  </header>
+
+  <div class="controls" role="toolbar" aria-label="Game filters">
+    <button class="chip live-chip" id="liveToggle" aria-pressed="false"><span class="dotled"></span> LIVE <span class="n" id="liveCount"></span></button>
+    <button class="chip on" data-rink="all">ALL RINKS</button>
+    <button class="chip" data-rink="Chiller North">NORTH <span class="n"></span></button>
+    <button class="chip" data-rink="Chiller Dublin">DUBLIN <span class="n"></span></button>
+    <button class="chip" data-rink="Chiller Easton">EASTON <span class="n"></span></button>
+    <button class="chip" data-rink="Chiller Ice Works">ICE WORKS <span class="n"></span></button>
+    <button class="chip" data-rink="OhioHealth Ice Haus">ICE HAUS <span class="n"></span></button>
+  </div>
+
+  <div class="board">
+    <main class="ice-main">
+      <!-- CENTER ICE: NOW -->
+      <section class="centerice" aria-label="Now on ice">
+        <div class="ci-rings" aria-hidden="true">
+          <div class="ring"></div><div class="ring r2"></div><div class="ring r3"></div>
+          <div class="ci-dot"><span class="lbl">NOW</span></div>
+        </div>
+        <div class="ci-meta">
+          <div class="k" id="ciKind">NEXT PUCK DROP</div>
+          <div class="big" id="ciTimer">--:--</div>
+          <div class="vs" id="ciMatch">—</div>
+          <div class="where" id="ciWhere">—</div>
+          <div class="ci-scoreline" id="ciScoreline" hidden>
+            <div class="sq" id="ciAway">0</div>
+            <div class="sq" id="ciClock2">—</div>
+            <div class="sq hot" id="ciHome">0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ICE LANES -->
+      <section aria-label="Tonight's games by lane">
+        <div class="lanes-head">
+          <h2>TONIGHT'S GAMES</h2>
+          <div class="rule" aria-hidden="true"></div>
+          <span class="cnt" id="laneCount"></span>
+        </div>
+        <div class="lanes" id="lanes"></div>
+      </section>
+    </main>
+
+    <!-- THE BOARDS -->
+    <aside class="rail" aria-label="Leaders and rinks">
+      <h3>TONIGHT'S LEADERS <span class="tag">THE BOARDS</span></h3>
+      <div class="tab-mini" id="statTabs" role="tablist" aria-label="Leader stat">
+        <button data-stat="points" class="on" role="tab" aria-selected="true">PTS</button>
+        <button data-stat="goals" role="tab" aria-selected="false">G</button>
+        <button data-stat="assists" role="tab" aria-selected="false">A</button>
+      </div>
+      <div id="leadersList"></div>
+      <div class="rail-sep"></div>
+      <h3>RINKS TONIGHT</h3>
+      <div id="rinkCounts"></div>
+      <p class="foot-note">Hover a lane to spotlight it. Hover a puck to pull a skate trail. <b>Swamp Donkeys</b> skate Thursday — nothing tonight.</p>
+    </aside>
+  </div>
+</div>
+<canvas id="trailCanvas" aria-hidden="true"></canvas>
+
+<script>
+'use strict';
+/* ============================================================
+   DATA — real CAHL slate (embed), times ET
+   ============================================================ */
+const GAMES = [
+ {t:'8:40 PM',  h:'Cyclones',              a:'Goalie Guacamole',         f:'Chiller Dublin',      st:'LIVE', hs:2, as:0, per:'1st', clk:'12:44'},
+ {t:'9:40 PM',  h:'Parking Lot Beers',     a:'Triple D',                 f:'OhioHealth Ice Haus', st:'LIVE', hs:1, as:1, per:'1st', clk:'6:02'},
+ {t:'9:50 PM',  h:'Dayton Hawks',          a:'Dayton Fire',              f:'NTPRD Chiller'},
+ {t:'9:50 PM',  h:'C Black Pizza (Saucy)', a:"Carlucci's Pizza Red",     f:'Chiller Dublin'},
+ {t:'10:00 PM', h:'Busch League',          a:'Brew Jackets',             f:'Chiller Ice Works'},
+ {t:'10:00 PM', h:'The Beer Barrel Boys',  a:'Gang Green',               f:'Chiller Dublin'},
+ {t:'10:00 PM', h:'Goose Eggs',            a:'The Scorners',             f:'Chiller North'},
+ {t:'10:00 PM', h:'Whiskey Warriors',      a:'Vandelay Industries',      f:'Chiller North'},
+ {t:'10:05 PM', h:'Cyclops',               a:'Goodfellas',               f:'Chiller Easton'},
+ {t:'10:30 PM', h:'Shakers Raw Dogs',      a:'The Chicken Selects',      f:'Chiller North'},
+ {t:'10:30 PM', h:'Bu-Hockkey BT5',        a:'T5P Hockey',               f:'Chiller Easton'},
+ {t:'10:50 PM', h:'Winking Lizard',        a:'Birdie Juicers',           f:'OhioHealth Ice Haus'},
+ {t:'11:00 PM', h:'Puck Buddies',          a:'The tip in',               f:'Chiller Dublin'},
+ {t:'11:10 PM', h:'Brewins',               a:'The Wobbly Pirates',       f:'Chiller North'},
+ {t:'11:10 PM', h:'CockTails and Dreams',  a:'Goal Train',               f:'Chiller Ice Works'}
+];
+
+const LEADERS = {
+ points: [
+  {n:'William Vonderahe',   tn:'Black and Tan',            v:5},
+  {n:'Brandon Spickler',    tn:'Hamilton Mustangs (Thu)',  v:4},
+  {n:'Will Wuotila',        tn:'Fluffers',                 v:4},
+  {n:'John Kemp',           tn:'Black and Tan',            v:3},
+  {n:'Matthew Brancaleone', tn:'Hamilton Mustangs (Thu)',  v:2}
+ ],
+ goals: [
+  {n:'Matthew Brancaleone', tn:'Hamilton Mustangs (Thu)',  v:2},
+  {n:'Kevin Couchman',      tn:"Chico's Bail Bonds",       v:2},
+  {n:'Hilton Dellinger',    tn:"Chico's Bail Bonds",       v:2},
+  {n:'Neal Gallucci',       tn:'Fluffers',                 v:2},
+  {n:'John Kemp',           tn:'Black and Tan',            v:2}
+ ],
+ assists: [
+  {n:'William Vonderahe',   tn:'Black and Tan',            v:5},
+  {n:'Tom Dury',            tn:'Black and Tan',            v:2},
+  {n:'Christopher Grim',    tn:'Fat Axes (T)',             v:2},
+  {n:'Steven Keslar',       tn:'Hamilton Mustangs (Thu)',  v:2},
+  {n:'TJ Nocar',            tn:'Fluffers',                 v:2}
+ ]
+};
+
+/* ============================================================
+   LANE ASSIGNMENT — deterministic sweep so no lane time-collides
+   ============================================================ */
+const toMin = s => { const m = s.match(/(\d+):(\d+)\s*(PM|AM)/); let h = +m[1] % 12; if (m[3]==='PM') h += 12; return h*60 + +m[2]; };
+(function assignLanes(){
+  const idx = GAMES.map((g,i)=>i).sort((a,b)=> toMin(GAMES[a].t)-toMin(GAMES[b].t));
+  const free = [0,0,0,0];
+  idx.forEach(i=>{
+    let lane = 0;
+    for (let l=1;l<4;l++) if (free[l] < free[lane]) lane = l;
+    GAMES[i].lane = lane;
+    free[lane] = toMin(GAMES[i].t) + 85; /* ~85-min ice slots */
+  });
+})();
+const LANE_NAMES = ['NORTH RUN','ZAMBONI','END BOARDS','GLASS SIDE'];
+const LANE_SUB = ['LANE A','LANE B','LANE C','LANE D'];
+
+/* ============================================================
+   STATE + RENDER
+   ============================================================ */
+const state = { rink:'all', liveOnly:false, stat:'points' };
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function visibleGames(){
+  return GAMES.filter(g =>
+    (state.rink==='all' || g.f===state.rink) &&
+    (!state.liveOnly || g.st==='LIVE'));
+}
+
+function laneLabel(l){ return LANE_NAMES[l]; }
+
+function renderLanes(){
+  const wrap = $('#lanes');
+  const games = visibleGames();
+  const activeLanes = [...new Set(games.map(g=>g.lane))].sort((a,b)=>a-b);
+  $('#laneCount').textContent = games.length + ' of ' + GAMES.length + ' games';
+  wrap.innerHTML = activeLanes.map(l=>{
+    const lg = games.filter(g=>g.lane===l).sort((a,b)=>toMin(a.t)-toMin(b.t));
+    const cards = lg.map(g=>{
+      const live = g.st==='LIVE';
+      const hs = live ? `<span class="tscore lead bump" data-bump="${g.h}">${g.hs}</span>` : '';
+      const as = live ? `<span class="tscore bump" data-bump="${g.a}">${g.as}</span>` : '';
+      return `
+      <article class="puck ${live?'live':''}" tabindex="0" data-rink="${g.f}" aria-label="${esc(g.h)} versus ${esc(g.a)}, ${live? 'live, '+g.hs+' to '+g.as : g.t}, ${g.f}">
+        <div class="time">${live?'LIVE':g.t}</div>
+        <div class="mid">
+          <div class="team"><span class="tname">${esc(g.h)}</span>${hs}</div>
+          <div class="team"><span class="tname">${esc(g.a)}</span>${as}</div>
+          <div class="meta">
+            <span class="status">${live ? g.per+' · '+g.clk : g.t}</span>
+            <span class="fac">${g.f}</span>
+          </div>
+        </div>
+        <span class="drift" aria-hidden="true"></span>
+      </article>`;
+    }).join('');
+    return `
+    <div class="lane" data-lane="${laneLabel(l)}" data-sub="${LANE_SUB[l]}">
+      ${cards}
+      <div class="lane-foot"><span class="addy">${lg[0].f.toUpperCase()}</span></div>
+    </div>`;
+  }).join('');
+  if (!games.length){
+    wrap.innerHTML = '<div style="grid-column:1/-1;padding:30px 10px;text-align:center;color:var(--ink-faint);font-size:13px">No games match this filter — the ice is clear.</div>';
+  }
+}
+
+function renderLeaders(){
+  const list = $('#leadersList');
+  const max = Math.max(...LEADERS[state.stat].map(p=>p.v));
+  list.innerHTML = LEADERS[state.stat].map((p,i)=>`
+    <div class="pts-row ${i===0?'top':''}">
+      <span class="rk">${String(i+1).padStart(2,'0')}</span>
+      <div class="who"><div class="pn">${esc(p.n)}</div><div class="tn">${esc(p.tn)}</div></div>
+      <span class="pv">${p.v}</span>
+      <div class="statbar"><i style="width:${Math.round(p.v/max*100)}%"></i></div>
+    </div>`).join('');
+}
+
+function renderRinkCounts(){
+  const rinks = {};
+  GAMES.forEach(g=>{ rinks[g.f] = rinks[g.f] || {n:0,live:0}; rinks[g.f].n++; if(g.st==='LIVE') rinks[g.f].live++; });
+  $('#rinkCounts').innerHTML = Object.entries(rinks).map(([r,v])=>`
+    <div class="rink-line"><span>${r}${v.live?` <span class="liveflag">● ${v.live} LIVE</span>`:''}</span><b>${v.n}</b></div>`).join('');
+}
+
+function renderChipCounts(){
+  document.querySelectorAll('.chip[data-rink]').forEach(ch=>{
+    const r = ch.dataset.rink;
+    const n = r==='all' ? GAMES.length : GAMES.filter(g=>g.f===r).length;
+    const span = ch.querySelector('.n');
+    if (span) span.textContent = n;
+  });
+  $('#liveCount').textContent = GAMES.filter(g=>g.st==='LIVE').length;
+}
+
+/* ---------- center-ice NOW module ---------- */
+let simMin = 20*60 + 25;   /* simulated wall clock: 8:25 PM ET */
+let lastLiveSnapshot = '';
+function nextGame(){
+  const upcoming = GAMES.filter(g=>g.st!=='LIVE' && toMin(g.t) > simMin).sort((a,b)=>toMin(a.t)-toMin(b.t));
+  return upcoming[0] || null;
+}
+function fmtClock(totalSec){
+  const m = Math.floor(totalSec/60), s = totalSec%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+function tick(){
+  simMin += 1/60 * 2; /* demo-time runs ~2x */
+  const wall = simMin;
+  const hh = Math.floor(wall/60), mm = Math.floor(wall%60), ss = Math.floor((wall%1)*60);
+  const clockEl = $('#etClock');
+  if (clockEl) clockEl.textContent = String(hh%12||12).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0')+(hh>=12?' PM ET':' AM ET');
+
+  const live = GAMES.filter(g=>g.st==='LIVE');
+  const n = nextGame();
+  const kind = $('#ciKind'), timer = $('#ciTimer'), match = $('#ciMatch'), where = $('#ciWhere'), sl = $('#ciScoreline');
+
+  if (live.length && (!n || toMin(n.t) - simMin > 18)){
+    /* a live game owns center ice */
+    const g = live[0];
+    kind.textContent = 'LIVE NOW — ' + g.per.toUpperCase() + ' PERIOD';
+    timer.textContent = g.clk;
+    match.innerHTML = '<b>'+esc(g.h)+'</b> vs <b>'+esc(g.a)+'</b>';
+    where.textContent = g.f;
+    sl.hidden = false;
+    $('#ciHome').textContent = g.hs;
+    $('#ciAway').textContent = g.as;
+    $('#ciClock2').textContent = g.clk;
+  } else if (n){
+    const diff = Math.max(0, toMin(n.t) - simMin);
+    kind.textContent = 'NEXT PUCK DROP';
+    timer.textContent = Math.floor(diff) + ':' + String(Math.floor((diff%1)*60)).padStart(2,'0');
+    match.innerHTML = '<b>'+esc(n.h)+'</b> vs <b>'+esc(n.a)+'</b>';
+    where.textContent = n.t + ' · ' + n.f;
+    sl.hidden = true;
+  }
+  /* live game clock creep */
+  lastLiveSnapshot = live.map(g=>g.h+':'+g.hs+'-'+g.as).join('|');
+  return live.length;
+}
+
+/* ============================================================
+   INTERACTIONS
+   ============================================================ */
+/* 1) rink filter chips */
+document.querySelectorAll('.chip[data-rink]').forEach(ch=>{
+  ch.addEventListener('click', ()=>{
+    state.rink = ch.dataset.rink;
+    document.querySelectorAll('.chip[data-rink]').forEach(c=>c.classList.toggle('on', c===ch));
+    renderLanes();
+  });
+});
+/* 2) live-only toggle */
+$('#liveToggle').addEventListener('click', ()=>{
+  state.liveOnly = !state.liveOnly;
+  $('#liveToggle').classList.toggle('on', state.liveOnly);
+  $('#liveToggle').setAttribute('aria-pressed', String(state.liveOnly));
+  renderLanes();
+});
+/* 3) lane focus on hover (desktop) — spotlight hovered lane, dim others */
+const lanesEl = $('#lanes');
+lanesEl.addEventListener('mouseover', e=>{
+  const lane = e.target.closest('.lane'); if (!lane) return;
+  lanesEl.querySelectorAll('.lane').forEach(l=>{
+    l.classList.toggle('focus', l===lane);
+    l.classList.toggle('dim', l!==lane);
+  });
+});
+lanesEl.addEventListener('mouseleave', ()=>{
+  lanesEl.querySelectorAll('.lane').forEach(l=>l.classList.remove('focus','dim'));
+});
+/* lane focus for touch: tap lane plate area toggles focus */
+lanesEl.addEventListener('click', e=>{
+  const puck = e.target.closest('.puck');
+  if (puck){ /* nudge animation: quick wobble via re-trigger of transition */
+    puck.style.transition = 'transform .3s cubic-bezier(.34,2.2,.64,1)';
+    puck.style.transform = 'translate(4px,-4px) scale(1.05)';
+    setTimeout(()=>{ puck.style.transform=''; puck.style.transition=''; }, 260);
+    return;
+  }
+  const lane = e.target.closest('.lane');
+  if (lane && matchMedia('(hover:none)').matches){
+    const was = lane.classList.contains('focus');
+    lanesEl.querySelectorAll('.lane').forEach(l=>l.classList.remove('focus','dim'));
+    if (!was){ lane.classList.add('focus'); }
+  }
+});
+/* keyboard focus mirrors lane spotlight */
+lanesEl.addEventListener('focusin', e=>{
+  const puck = e.target.closest('.puck'); if (!puck) return;
+  const lane = puck.closest('.lane');
+  lanesEl.querySelectorAll('.lane').forEach(l=>{
+    l.classList.toggle('focus', l===lane); l.classList.toggle('dim', l!==lane);
+  });
+});
+lanesEl.addEventListener('focusout', ()=>{
+  lanesEl.querySelectorAll('.lane').forEach(l=>l.classList.remove('focus','dim'));
+});
+
+/* 4) leaders stat tabs */
+document.querySelectorAll('#statTabs button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    state.stat = b.dataset.stat;
+    document.querySelectorAll('#statTabs button').forEach(x=>{
+      const on = x===b; x.classList.toggle('on',on); x.setAttribute('aria-selected',String(on));
+    });
+    renderLeaders();
+  });
+});
+
+/* ============================================================
+   SKATE TRAILS — canvas pointer trail, fine pointers only
+   ============================================================ */
+(function trails(){
+  const canvas = $('#trailCanvas');
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+  const ctx = canvas.getContext('2d');
+  let dpr = Math.min(devicePixelRatio||1, 2);
+  function size(){ dpr = Math.min(devicePixelRatio||1,2); canvas.width=innerWidth*dpr; canvas.height=innerHeight*dpr; }
+  size(); addEventListener('resize', size);
+  const pts = [];
+  addEventListener('pointermove', e=>{
+    pts.push({x:e.clientX*dpr, y:e.clientY*dpr, t:performance.now()});
+    if (pts.length>40) pts.shift();
+  }, {passive:true});
+  function frame(now){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    /* cull old points */
+    while (pts.length && now - pts[0].t > 700) pts.shift();
+    if (pts.length>1){
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      for (let i=1;i<pts.length;i++){
+        const p0=pts[i-1], p1=pts[i];
+        const age = (now - p1.t)/700;
+        const alpha = Math.max(0, 0.34*(1-age));
+        ctx.strokeStyle = 'rgba(191,227,247,'+alpha.toFixed(3)+')';
+        ctx.lineWidth = Math.max(1, 7*dpr*(1-age));
+        ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+      }
+      /* edge dust */
+      const last = pts[pts.length-1];
+      ctx.fillStyle = 'rgba(234,244,251,'+(0.5*(1-(now-last.t)/700)).toFixed(3)+')';
+      ctx.beginPath(); ctx.arc(last.x,last.y,1.6*dpr,0,7); ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* ============================================================
+   LIVE SIM — demo heartbeat: clock ticks, period flip, goals
+   ============================================================ */
+(function liveSim(){
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let tickCount = 0;
+  function beat(){
+    tickCount++;
+    const live = GAMES.filter(g=>g.st==='LIVE');
+    live.forEach(g=>{
+      if (!reduce){
+        let [m,s] = g.clk.split(':').map(Number);
+        s -= 1;
+        if (s<0){ s=59; m--; }
+        if (m<0){ m=19; s=59; g.per = g.per==='1st' ? '2nd' : g.per; }
+        g.clk = m+':'+String(s).padStart(2,'0');
+      }
+    });
+    /* occasional goal for demo drama (~ every 45s) */
+    if (!reduce && tickCount % 45 === 0 && live.length){
+      const g = live[Math.floor(Math.random()*live.length)];
+      if (Math.random()<0.5) g.hs++; else g.as++;
+      flashGoal(g);
+    }
+    renderLiveOnly();
+    tick();
+  }
+  function flashGoal(g){
+    document.querySelectorAll('.puck.live').forEach(card=>{
+      const names = [...card.querySelectorAll('.tname')].map(t=>t.textContent);
+      if (names.includes(g.h) || names.includes(g.a)){
+        card.animate(
+          [{boxShadow:'0 0 0 0 rgba(206,17,38,.0)'},{boxShadow:'0 0 0 6px rgba(206,17,38,.35)'},{boxShadow:'0 0 0 0 rgba(206,17,38,0)'}],
+          {duration:900, easing:'ease-out'}
+        );
+        card.querySelectorAll('.tscore').forEach(el=>{
+          const isHome = names[0]===g.h;
+          const target = isHome ? g.hs : g.as;
+          el.textContent = target;
+          el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
+        });
+      }
+    });
+  }
+  /* clocks are updated in-place above; full re-render stays event-driven (filters/toggles) */
+  function renderLiveOnly(){
+    document.querySelectorAll('.puck.live').forEach(card=>{
+      const names = [...card.querySelectorAll('.tname')].map(t=>t.textContent);
+      const g = GAMES.find(x=>x.st==='LIVE' && (names[0]===x.h && names[1]===x.a));
+      if (!g) return;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = g.per + ' · ' + g.clk;
+    });
+  }
+  function loop(){
+    beat();
+    setTimeout(loop, 1000);
+  }
+  loop();
+  /* gentle re-render of lanes every 20s to catch filter-count changes */
+  setInterval(()=>{ renderLanes(); }, 20000);
+})();
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+renderChipCounts();
+renderLanes();
+renderLeaders();
+renderRinkCounts();
+tick();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+# CAHL UI/UX JURY — R10, Juror 3/5 — VISUAL CRAFT lens (v70) — verification round
+
+- Method: Chrome-free static audit of deployed bytes — `/static/css/style.css?v=70` (88,845 B, sha `d1a6fe1b`), `/static/js/app.js?v=70` (157,005 B, sha `12320952`), `/` index (13,161 B, `a9b99272`), `/static/css/landing.css?v=70` (8,892 B, `e8637607`), `cahl-logo.svg` (2,936 B), `upright-lockup.png` (242,816 B) — fetched 2026-09-04 ~20:50Z; `/api/version` = `{"js":70}`; index boot global `APP_VERSION = 70`; each asset fetched twice, byte-identical. Baselines: my saved `jury_r9/style_v67.css` (sha re-verified `9670ff78`) + `jury_r9/landing_v67.css` + `jury_r9/app_v67.js` (sha `079d3033`) — enumerated hunks: landing.css +21/−23, style.css +2/−2, app.js +12/−12. Contrast recomputed independently (WCAG relative luminance). Live probes: `/api/today` 200 in 1.21s, clean of Bye-Week/Team-Blue/Red; `/api/players` cold 65.5s / 5.20MB, warm 3.59s, gzipped wire 1.51MB — labeled per round convention. 390px rendering remains unverified (static) — photons need owner-captured screenshots.
+- Score lineage: 7.8 (R2) → 8.1 (R3) → 8.5 (R4) → 8.7 (R5) → 8.7 (R6) → 9.1 (R7) → 9.4 (R8) → 9.5 (R9) → **9.6 (R10)**. First round in nine where I have zero new material defects to flag — the v68 fix pass closed every visual-craft carry, and the diff since v67 contains exactly the four cited hunks plus the dead-link/null-stat guards.
+
+## Fix-verification ledger (my R9 citations → v70 deployed bytes)
+
+| R9 citation | v70 byte evidence | Status |
+|---|---|---|
+| landing.css off-scale decls quantized to 13/14/16/20/26/30/34 | Full census: 15 px decls = 13×2, 14×4, 16×4, 20×1, 26×2, 30×1, 34×1 — **zero off-scale, zero sub-13** (was 13 off-scale of 21 in v67, incl. 11/12.5/13.5/44). Diff shows every mapping verbatim: 44→34, 17→16 (×3), 15→14, 13.5→14 (×2), 12.5→13 (×2), 19→20, 27→26, 32→30, 11px chip → `var(--mono-sm)`; mobile title 32→30, 27→26 | LANDED ✓ |
+| Duplicate light-theme `.rink-head` rule deleted | `html[data-theme="light"] .rink-head` now occurs **once** (style.css L1720); v67 had two adjacent copies at L1719–1720 | LANDED ✓ |
+| Palette `:focus-within` cue added | style.css L783: `.pal-input-row:focus-within { box-shadow: inset 0 0 0 2px var(--union); border-radius: inherit; }` — 3rd-round carry closed; file total :focus-within count 2→3 (live-pill L248, tbody tr L513) | LANDED ✓ |
+| CTA hover token darkened `#2b71c4` | style.css L35: `--union-hover: #2b71c4;` (v67: `#3a8fe0`, now 0 refs); comment "R9-4 darkened: 4.6:1 with white label". My independent math: white-on-#2b71c4 = **4.93:1** — idle 5.39:1, hover now passes 4.5:1 without the large-text exemption | LANDED ✓ |
+| (context) Today sponsor strip unified to serif lockup | app.js L1239 now loads `upright-lockup.png`; `crown` refs in app.js = **0**, `upright-lockup` = 1; sponsor strip img also gets `max-width:150px; object-fit:contain` and height 22→20px — dual-mark defect closed | LANDED ✓ |
+| (context) landing raw-hex fallbacks dropped | landing.css raw-hex census v67 `[#1f6cb8, #3a8fe0, #b8925e, #ffffff]` (6) → v70 **`[#ffffff]` (1)** — and that lone survivor is the gate-CTA's white *label* on `var(--union-cta)` (correct, not a fallback); `var(--union-hover)` / `var(--sponsor-gold)` now consumed bare | LANDED ✓ |
+
+Also verified in the v67→v70 diff (unrequested): the dead-link guard finished at **all** cited sibling sites (League leaderSection L282, Analytics L2521, typeahead L702 — rows lose `class="link"`+onclick when `player_id`/`token` is null; J5's wrong-sibling finding closed), `?? '-'` null-stat guards on all Players/leaderboard numeric cells (pairs with v69's payload trim), and `lp-cta-sm` 42→44px (the mobile floor). Supabase persistence (v70) is env-gated server-side — `/api/players` still reports no `from_supabase` flag (creds pending), so it changes no rendered bytes; correctly invisible to craft scoring.
+
+Still re-verified intact: 10 keyframes all purposeful (LIVE breathe/pulse, score-flash, palette fade/pop, shimmer, spin, fade-in, hero-next-pulse, rise-in) with 4 RM blocks in style.css + landing RM-covers its 7 transitions; exactly **1 backdrop-filter** in style.css (palette scrim blur 3px) — landing's `blur(10px)` is **gone** (nav now solid `var(--bg)` + hairline, single-blur budget restored); text-shadow census exactly the 2 live-score sites + the scrim kill (L405/413/452); 14 focus-visible, 20 tnum sites (40 incl. variants), 16 zebra nth-child, 6× min-height:44px floors, 0 font-size literals in app.js, 43 inline `style=""` spacing one-offs (unchanged, the one consistency scar), dashboard scale still exactly 8 values (13/14/16/18/20/26/30/34) with zero sub-13. `#2a7fd4` survives only as the documented `--union` night-tune token. Contrast spot-checks all AA or better: dark accent #ef3d54 5.13:1 bg / 4.77:1 panel, sponsor gold 6.38 dark / 6.18 light, rink-head 6.16:1, faint 6.18/5.41.
+
+## Dimension scores (fresh, v70)
+
+| # | Dimension | Evidence (v70 bytes) | Score |
+|---|---|---|---|
+| 1 | Visual identity | Landing is a real marketing surface (sticky nav, 34px hero, mono chip icons, serif sponsor lockup — one mark everywhere now, Today strip included); dashboard keeps rink watermark, broadcast bug, tonight-KPI band. Not 9.7: CAHL's own mark is still crest-only; the signature serif moment belongs to the sponsor | 9.6 |
+| 2 | Typographic system | Both files on one scale for the first time: dashboard 8 values / 73 decls, landing 7 values / 15 decls, zero sub-13 anywhere, zero JS literals; mono tokens consumed in landing (4× `--mono-sm`, 2× `--mono-xs`) | 9.7 |
+| 3 | Color system | Every hue tokenized both themes; 4 raw-hex fallbacks → 0 (the lone `#ffffff` is a correct label color, not a fallback); hover now 4.93:1 (idle 5.39:1); Goal-Red discipline intact; gold AA in both themes by my math | 9.7 |
+| 4 | Layout & hierarchy | Dup rink-head rule gone (the last structural dead weight); rink-line margins clear all text columns; sponsor card stacks ≤719px; lp-grid `auto-fit minmax(210px,1fr)`; no new structural hunks | 9.7 |
+| 5 | Density & data presentation | Same core as v63's 9.3 (sticky theads, zebra, 20 tnum sites, ellipsis discipline, table-owns-scrollport) — no new density defects, but no density improvements either; null-stat `?? '-'` guards are data hygiene, not density craft | 9.4 |
+| 6 | Interaction & micro-feedback | esc() census 153 uses / 0 raw sites; dead-link rows now honestly inert (affordance removed, not just no-op); dataStamp ticks every 60s. Not 9.7: cold-index copy "up to ~30s" vs my measured 65.5s cold /api/players this round — the band is falsifiable (5th round carrying this) | 9.5 |
+| 7 | Motion design | 10 keyframes, all purposeful, all RM-covered; landing ships 0 keyframes and RM-covers its 7 transitions; single-blur budget restored. Not 9.7: timing feel remains photon territory (static) | 9.6 |
+| 8 | Depth & material | Surface stack strictly ordered; lp-nav blur removed — exactly one backdrop-filter (palette scrim) app-wide; text-shadow census exactly the 2 live sites + scrim kill; 36 box-shadows all hairline/luminance-stacked | 9.7 |
+| 9 | Consistency & component quality | All CTAs one component (`--union-cta`/`--union-hover`, one anatomy); chip/kicker anatomy shared landing↔dashboard; sponsor strip = landing card mark. Remaining: 43 inline `style=""` spacing one-offs in JS templates — the pattern section-h was built to kill | 9.6 |
+| 10 | Mobile ergonomics | 6× 44px floors + coarse-pointer blocks intact; `lp-cta-sm` 44px closes the sub-44 CTA; landing nav collapses ≤719, CTA 50px ≤430; sponsor strip img constrained 150px. 390px photons unverified (static) | 9.6 |
+
+**WEIGHTED TOTAL: 9.6/10** (identity 1.152 + type 1.164 + color 0.970 + layout 1.164 + density 1.128 + interaction 0.950 + motion 0.768 + depth 0.776 + consistency 0.768 + mobile 0.768 = **9.608**)
+
+Gate status: ≥9.7 per-dimension met by **three** dimensions (type, color, depth) — first time any dimension has crossed 9.7; five sit at 9.6. Every R9-cited fix and both context claims landed; the score now moves only on density craft, the players-latency copy, and photons.
+
+## The 3 cheapest fixes toward 9.7-per-dimension
+
+1. **Make the cold-index copy true, or the cold start fast** (~30min–1h): my measured /api/players this round: cold 65.5s (worst since R7), warm 3.6s, gzipped wire 1.51MB — while app copy says "up to ~30s, then it's instant". Supabase hydrate is code-complete but inert until creds land; until then either widen the copy to "up to ~60s on first load" or have the cron warm cover it. Interaction 9.5→~9.7 (5th-round carry, and the only honest-copy defect left in the app). **Delta: ~+0.02.**
+2. **Spend one density pass on the Today table** (~1h): v63-era bones unchanged for 3 rounds — zebra + sticky thead + tnum are all present, but row rhythm is still uniform; add a compact `td.num` vertical rhythm (padding tweak on `.today-list` rows), and a subtle league-grouping hairline in standings. Density 9.4→~9.6. **Delta: ~+0.024.**
+3. **Kill the 43 inline `style=""` spacing one-offs** (~45min): all margin-only one-offs in JS templates; migrate to 2–3 utility classes (`.mt-8/.mt-12/.mt-16`) or extend `section-h.tight`. Consistency 9.6→~9.7, and it permanently retires the inline-style census. **Delta: ~+0.008.**
+
+Combined realistic ceiling for R11 if all three land: **~9.65/10 weighted, six dimensions ≥9.7**. The honest gap is unchanged: hover/press feel, animation timing, and true 390x844 rendering need vision_analyze on owner-captured screenshots — this audit certifies bytes, not photons. Photons are also the only path left to lift identity (crest-only CAHL mark) and motion timing past 9.6.
+
+VERDICT: 9.6/10

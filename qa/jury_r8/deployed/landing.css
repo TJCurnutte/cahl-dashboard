@@ -1,0 +1,174 @@
+/* ============================================================
+   LANDING GATE — click-through landing page for cahl.neural-forge.io
+   Visitors land here first; "Enter the Dashboard" reveals the app.
+   localStorage 'cahl-entered' skips the gate on later visits.
+   ============================================================ */
+
+/* --- gate shell --- */
+#landingGate {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(42, 127, 212, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 85% 110%, rgba(206, 18, 41, 0.10), transparent 55%),
+    var(--bg);
+  opacity: 1;
+  transition: opacity 0.45s var(--ease, ease), visibility 0.45s;
+}
+#landingGate.gate-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+html[data-theme="light"] #landingGate {
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(42, 127, 212, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 85% 110%, rgba(206, 18, 41, 0.07), transparent 55%),
+    var(--bg);
+}
+
+/* faint rink-lines backdrop, echoing the dashboard hero watermark */
+#landingGate::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(206, 18, 41, 0.10) calc(50% - 1px), rgba(206, 18, 41, 0.10) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(90deg, transparent calc(22% - 1px), rgba(42, 127, 212, 0.08) calc(22% - 1px), rgba(42, 127, 212, 0.08) calc(22% + 1px), transparent calc(22% + 1px)),
+    linear-gradient(90deg, transparent calc(78% - 1px), rgba(42, 127, 212, 0.08) calc(78% - 1px), rgba(42, 127, 212, 0.08) calc(78% + 1px), transparent calc(78% + 1px)),
+    radial-gradient(circle at 50% 50%, rgba(42, 127, 212, 0.05) 0 120px, transparent 121px);
+}
+html[data-theme="light"] #landingGate::before { opacity: 0.6; }
+
+.gate-card {
+  position: relative;
+  width: min(560px, 100%);
+  text-align: center;
+  padding: 36px 32px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+html[data-theme="light"] .gate-card { box-shadow: 0 24px 80px rgba(13, 27, 46, 0.14); }
+
+.gate-logo {
+  width: min(330px, 84%);
+  height: auto;
+  display: block;
+  margin: 0 auto 6px;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.35));
+}
+html[data-theme="light"] .gate-logo { filter: drop-shadow(0 10px 24px rgba(13, 27, 46, 0.18)); }
+
+.gate-kicker {
+  margin: 14px 0 2px;
+  font-family: var(--mono);
+  font-size: var(--mono-sm);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gate-title {
+  margin: 0 0 10px;
+  text-wrap: balance;
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  line-height: 1.08;
+}
+.gate-sub {
+  margin: 0 auto 26px;
+  max-width: 40ch;
+  text-wrap: pretty;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.gate-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 52px; padding: 0 34px;
+  font-family: var(--display);
+  font-size: 19px; font-weight: 700; letter-spacing: 0.04em;
+  color: #ffffff;
+  background: #1f6cb8; /* 5.4:1 with white — AA for the 19px label */
+  border: 1px solid rgba(159, 183, 214, 0.22);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform var(--t-fast, 0.15s) var(--ease, ease), background var(--t-fast, 0.15s);
+}
+.gate-cta:hover { transform: translateY(-1px); background: var(--union); }
+.gate-cta:active { transform: translateY(0) scale(0.985); }
+.gate-cta:focus-visible { outline: 2px solid var(--union); outline-offset: 3px; }
+.gate-cta .cta-arrow { transition: transform var(--t-fast, 0.15s) var(--ease, ease); }
+.gate-cta:hover .cta-arrow { transform: translateX(3px); }
+
+/* sponsor banner (dark) */
+.gate-sponsor {
+  margin: 30px auto 0;
+  padding: 12px 16px;
+  width: fit-content;
+  max-width: 100%;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--inset);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  text-decoration: none;
+  transition: border-color var(--t-fast, 0.15s), background var(--t-fast, 0.15s);
+}
+.gate-sponsor:hover { border-color: var(--border-strong); background: var(--panel-2); }
+.gate-sponsor:focus-visible { outline: 2px solid var(--union); outline-offset: 2px; }
+.gate-sponsor img { height: 30px; width: auto; display: block; }
+.gate-sponsor .sponsor-text { text-align: left; }
+.gate-sponsor .sponsor-kicker {
+  display: block;
+  font-family: var(--mono); font-size: var(--mono-xs);
+  font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--faint);
+}
+.gate-sponsor .sponsor-name {
+  display: block;
+  font-family: var(--display); font-size: 15px; font-weight: 700; letter-spacing: 0.03em;
+  color: var(--text-2);
+}
+.gate-sponsor:hover .sponsor-name { color: #b8925e; }
+
+/* --- in-app sponsor strip (Today tab bottom) --- */
+.sponsor-strip {
+  margin: 18px 0 6px;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 10px 16px;
+  background: var(--inset);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  text-decoration: none;
+  transition: border-color var(--t-fast, 0.15s), background var(--t-fast, 0.15s);
+}
+.sponsor-strip:hover { border-color: var(--border-strong); background: var(--panel-2); }
+.sponsor-strip:focus-visible { outline: 2px solid var(--union); outline-offset: 2px; }
+.sponsor-strip img { height: 26px; width: auto; display: block; opacity: 0.92; }
+.sponsor-strip .sponsor-strip-text {
+  font-family: var(--display); font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.sponsor-strip .sponsor-strip-kicker {
+  font-family: var(--mono); font-size: var(--mono-xs); font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--faint);
+  display: block;
+}
+.sponsor-strip:hover .sponsor-strip-text { color: #b8925e; }
+
+@media (max-width: 479px) {
+  .gate-card { padding: 30px 20px 24px; }
+  .gate-title { font-size: 25px; }
+  .gate-logo { width: min(240px, 80%); }
+  .gate-sponsor { gap: 10px; }
+  .gate-sponsor img { height: 24px; }
+  .sponsor-strip { gap: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #landingGate, .gate-cta, .gate-cta .cta-arrow, .gate-sponsor, .sponsor-strip { transition: none; }
+}

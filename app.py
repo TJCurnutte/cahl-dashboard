@@ -1,4 +1,5 @@
 import os
+import json
 import socket
 import time
 import concurrent.futures
@@ -42,7 +43,81 @@ def no_cache_html(resp):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    """Landing page. Server-renders the live ticker, scoreboard card and stat
+    band from caches/snapshots (never blocks on the network: falls back to
+    static copy when caches are cold)."""
+    ticker_items = ""
+    ticker_label = "TONIGHT IN THE CAHL"
+    hero_scorecard = ""
+    stat_players = stat_teams = stat_leagues = ""
+    games = []
+    players = []
+    try:
+        # Games: prefer the warm scores memo, else parse the homepage once.
+        if _SCORES_FLIGHT.get("result") and time.time() - _SCORES_FLIGHT.get("ts", 0) < 300:
+            home = _SCORES_FLIGHT["result"]
+        else:
+            home, err = scraper.parse_homepage()
+        games = (home or {}).get("today") or []
+
+        # Indexes: snapshots first (7d), then in-memory caches.
+        players = (_snapshot_load(_PLAYERS_SNAPSHOT, max_age_s=7 * 86400) or {}).get("players") \
+            or _PLAYERS_CACHE.get("data") or []
+        teams = _snapshot_load(_TEAMS_SNAPSHOT, max_age_s=7 * 86400) \
+            or _TEAMS_CACHE.get("data") or []
+        leagues = (home or {}).get("leagues") or []
+
+        # Ticker: game scores/times, then league names.
+        bits = []
+        for g in games[:8]:
+            hs, as_ = g.get("home_score"), g.get("away_score")
+            score = f"{hs}\u2013{as_} " if hs is not None else ""
+            bits.append(f"{score}{g.get('home', '')} vs {g.get('away', '')} · {g.get('time', '')}")
+        for lg in leagues[:6]:
+            bits.append(lg.get("name", ""))
+        if bits:
+            ticker_items = " &nbsp;●&nbsp; ".join(bits)
+        ticker_track = (ticker_items + " &nbsp;●&nbsp; ") * 4 if ticker_items else ""
+
+        # Scoreboard card: tonight's rows + league leader teaser.
+        if games:
+            rows = []
+            for g in games[:3]:
+                played = g.get("home_score") is not None
+                score = (f'<span class="lp-hc-score">{g["home_score"]}\u2013{g["away_score"]}</span>'
+                         if played else '<span class="lp-hc-time">' + (g.get("time") or "") + '</span>')
+                rows.append(
+                    f'<div class="lp-hc-row"><span class="lp-hc-teams">{g.get("home", "")} '
+                    f'<span class="lp-hc-vs">vs</span> {g.get("away", "")}</span>{score}</div>')
+            if players:
+                top = max(players, key=lambda p: (p.get("pts") or 0))
+                if top.get("pts"):
+                    rows.append('<div class="lp-hc-row lp-hc-leader"><span class="lp-hc-teams">'
+                                + 'LEAGUE LEADER: ' + (top.get("name") or "") + '</span>'
+                                + '<span class="lp-hc-score">' + str(top.get("pts")) + ' PTS</span></div>')
+            hero_scorecard = '<div class="lp-hc-rows">' + "".join(rows) + '</div>'
+            if any(g.get("home_score") is not None for g in games):
+                ticker_label = "LIVE SCORES"
+        else:
+            hero_scorecard = ('<div class="lp-hc-rows"><div class="lp-hc-empty">'
+                              'Tonight\u2019s games are in the books. '
+                              'The next slate posts here in the morning.</div></div>')
+            ticker_label = "SEE YOU AT THE RINK"
+
+        # Stat band.
+        if players:
+            stat_players = f"{len(players):,}"
+        if teams:
+            stat_teams = str(len(teams))
+        if leagues:
+            stat_leagues = str(len(leagues))
+    except Exception:
+        pass
+    return render_template("index.html", ticker_items=ticker_track,
+                           hero_scorecard=hero_scorecard, ticker_label=ticker_label,
+                           stat_players=stat_players or "5,900",
+                           stat_teams=stat_teams or "250",
+                           stat_leagues=stat_leagues or "27")
 
 
 @app.route("/api/today")
@@ -60,10 +135,37 @@ _SCORES_FLIGHT = {"result": None, "ts": 0.0, "inflight": False, "gen": 0}
 _SCORES_MEMO_S = 20  # serve cached result to pollers within this window
 
 
+_LAST_GOOD_PATH = "/tmp/cahl-last-good.json"
+
+def _save_last_good(payload):
+    try:
+        with open(_LAST_GOOD_PATH, "w") as f:
+            json.dump({"ts": time.time(), "payload": payload}, f)
+    except Exception:
+        pass
+
+def _load_last_good():
+    try:
+        with open(_LAST_GOOD_PATH) as f:
+            blob = json.load(f)
+        return blob
+    except Exception:
+        return None
+
 def _today_scores_compute():
     """Shared body: parse homepage + enrich with live scores. Raises on hard error."""
     data, err = scraper.parse_homepage()
     if err:
+        # Last-known-data fallback: when the source site blocks/slow-fails, serve the
+        # most recent good snapshot instead of a hard error. The UI shows an "as of"
+        # note so nobody mistakes stale data for live data.
+        last = _load_last_good()
+        if last and time.time() - last.get("ts", 0) < 26 * 3600:
+            payload = dict(last.get("payload") or {})
+            payload["_stale"] = True
+            payload["_staleAsOf"] = time.strftime("%b %d, %I:%M %p ET", time.gmtime(last.get("ts", 0) - 4 * 3600))
+            payload["_notice"] = str(err)
+            return payload  # NOT raising — the site degrades gracefully
         raise RuntimeError(err)
     try:
         league_ids = None
@@ -120,6 +222,8 @@ def today_scores():
         _SCORES_FLIGHT["result"] = payload
         _SCORES_FLIGHT["ts"] = time.time()
         _SCORES_FLIGHT["inflight"] = False
+    _save_last_good(payload)
+    with _SCORES_COND:
         _SCORES_FLIGHT["gen"] += 1
         _SCORES_COND.notify_all()
     return jsonify(payload)
@@ -234,18 +338,38 @@ def team_history(team_id):
 
 
 def _all_teams_cached(timeout=None):
-    """The /api/teams aggregate, using its 5-minute cache."""
+    """The /api/teams aggregate, using its 5-minute cache (disk-hydrated on cold)."""
     import time
     now = time.time()
     if _TEAMS_CACHE["data"] is not None and now - _TEAMS_CACHE["ts"] < _TEAMS_TTL:
         return _TEAMS_CACHE["data"], None
+    # Cold instance: hydrate from Supabase first, then the on-disk crawl
+    # snapshot (<=7 days). Players-index seeding depends on this team list.
+    if _TEAMS_CACHE["data"] is None:
+        sb, ok = _sb_read("teams_index")
+        if ok and isinstance(sb, list) and sb:
+            _TEAMS_CACHE["data"] = sb
+            _TEAMS_CACHE["ts"] = now
+            return sb, None
+        snap = _snapshot_load(_TEAMS_SNAPSHOT, max_age_s=7 * 86400)
+        if isinstance(snap, list) and snap:
+            _TEAMS_CACHE["data"] = snap
+            _TEAMS_CACHE["ts"] = now
+            return snap, None
     kw = {} if timeout is None else {"timeout": timeout}
     data, err = scraper.parse_all_teams(**kw)
-    if err:
+    if err and not data:
+        # Fall back to the (possibly stale) snapshot rather than failing hard —
+        # a 7-day-old team list beats a 502 for every downstream endpoint.
+        snap = _snapshot_load(_TEAMS_SNAPSHOT, max_age_s=30 * 86400)
+        if isinstance(snap, list) and snap:
+            return snap, None
         return None, err
     if data:
         _TEAMS_CACHE["data"] = data
         _TEAMS_CACHE["ts"] = now
+        _snapshot_save(_TEAMS_SNAPSHOT, data)
+        _sb_write("teams_index", data)
     return data, None
 
 
@@ -294,6 +418,101 @@ _PLAYERS_CACHE = {"data": None, "ts": 0, "partial": False}
 _PLAYERS_TTL = 3600  # 1 hour; matches the hourly cron baseline that re-warms it.
 _PLAYERS_COND = __import__("threading").Condition()
 _PLAYERS_FLIGHT = {"inflight": False, "t0": 0.0, "waiters": 0}
+
+# ---- Disk-backed index snapshot (R10: "store all the names on the site") ----
+# The in-process cache dies with every cold instance; a full rebuild fans out to
+# ~60 rosters and takes 20-40s. We snapshot the completed index to /tmp after
+# every successful build and load it back at boot / on cold cache, so any warm
+# instance answers instantly and a fresh instance starts from the last known
+# complete index instead of an empty one.
+_PLAYERS_SNAPSHOT = "/tmp/cahl_players_index.json"
+_TEAMS_SNAPSHOT = "/tmp/cahl_teams_index.json"
+
+# ---- Supabase persistent store (cross-instance, survives cold boots) ----
+# PostgREST direct over HTTPS — no SDK dependency. Feature-flagged: inert
+# unless SUPABASE_URL + SUPABASE_SERVICE_KEY are set in the environment.
+# Table: cahl_cache(key text pk, payload jsonb, updated_at timestamptz).
+import urllib.request as _ureq
+
+
+def _sb_config():
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    return (url, key) if url and key else (None, None)
+
+
+def _sb_read(key, timeout=8):
+    """Fetch a cached payload from Supabase. Returns (data, ok)."""
+    url, key_env = _sb_config()
+    if not url:
+        return None, False
+    try:
+        req = _ureq.Request(
+            f"{url}/rest/v1/cahl_cache?select=payload,updated_at&key=eq.{key}",
+            headers={"apikey": key_env, "Authorization": f"Bearer {key_env}"},
+        )
+        with _ureq.urlopen(req, timeout=timeout) as resp:
+            rows = json.loads(resp.read().decode())
+        if rows and isinstance(rows[0].get("payload"), (dict, list)):
+            return rows[0]["payload"], True
+    except Exception:
+        pass
+    return None, False
+
+
+def _sb_write(key, payload, timeout=15):
+    """Upsert a payload into Supabase. Fire-and-forget semantics."""
+    url, key_env = _sb_config()
+    if not url:
+        return False
+    try:
+        req = _ureq.Request(
+            f"{url}/rest/v1/cahl_cache?on_conflict=key",
+            data=json.dumps({"key": key, "payload": payload,
+                             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())}).encode(),
+            headers={"apikey": key_env, "Authorization": f"Bearer {key_env}",
+                     "Content-Type": "application/json",
+                     "Prefer": "resolution=merge-duplicates"},
+            method="POST",
+        )
+        with _ureq.urlopen(req, timeout=timeout) as resp:
+            resp.read()
+        return True
+    except Exception:
+        return False
+
+
+def _snapshot_save(path, payload):
+    """Best-effort atomic snapshot write; failures never break the request."""
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh, separators=(",", ":"))
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def _snapshot_load(path, max_age_s):
+    """Load a snapshot if it exists and is fresh enough. Returns data or None."""
+    try:
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) <= max_age_s:
+            with open(path) as fh:
+                return json.load(fh)
+    except Exception:
+        pass
+    return None
+
+
+def _players_snapshot_load():
+    """Seed the in-memory players cache from the last completed build (<=7d)."""
+    snap = _snapshot_load(_PLAYERS_SNAPSHOT, max_age_s=7 * 86400)
+    if isinstance(snap, dict) and isinstance(snap.get("players"), list) and snap["players"]:
+        _PLAYERS_CACHE["data"] = snap["players"]
+        _PLAYERS_CACHE["ts"] = snap.get("ts", time.time())
+        _PLAYERS_CACHE["partial"] = False
+        return True
+    return False
 
 
 def _merge_player_index(entries):
@@ -352,6 +571,21 @@ def players():
             and now - _PLAYERS_CACHE["ts"] < _PLAYERS_TTL
             and not _PLAYERS_CACHE.get("partial")):
         return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False})
+
+    # Cold instance: hydrate from Supabase (cross-instance, always fresh) or
+    # the local on-disk snapshot, before fanning out to ~60 rosters. Turns most
+    # cold starts from 30-60s into well under a second.
+    if _PLAYERS_CACHE["data"] is None:
+        sb, ok = _sb_read("players_index")
+        if ok and isinstance(sb.get("players"), list) and sb["players"]:
+            _PLAYERS_CACHE["data"] = sb["players"]
+            _PLAYERS_CACHE["ts"] = now
+            _PLAYERS_CACHE["partial"] = False
+            return jsonify({"players": sb["players"], "partial": False,
+                            "from_supabase": True})
+        if _players_snapshot_load():
+            return jsonify({"players": _PLAYERS_CACHE["data"], "partial": False,
+                            "from_snapshot": True})
 
     # Single-flight: one rebuild at a time; concurrent requests wait for the
     # in-flight rebuild instead of each fanning out to ~60 rosters (the
@@ -419,6 +653,12 @@ def _players_rebuild(now):
     # inserting while we sort — "dictionary changed size during iteration" 500.
     with idx_lock:
         snapshot = list(index.values())
+    # Wire-size trim: drop zero/empty stat fields per player. Clients already
+    # coerce missing to 0 (p.pts || 0 patterns everywhere); preseason rosters
+    # are 94% zeros, which dominated the 5.8MB payload.
+    for p in snapshot:
+        for k in [k for k, v in p.items() if v in (0, None, "", "-") and k != "name"]:
+            del p[k]
     data = sorted(snapshot, key=lambda p: p["name"].lower())
     # Never cache an empty result as "complete" — one bad cycle would poison
     # lookups and the leaderboard for the whole TTL.
@@ -426,6 +666,11 @@ def _players_rebuild(now):
         _PLAYERS_CACHE["data"] = data
         _PLAYERS_CACHE["ts"] = now
         _PLAYERS_CACHE["partial"] = not complete
+        # Snapshot only COMPLETE builds — a partial snapshot would advertise
+        # stale completeness forever (5.8MB write is ~50ms on the warm path).
+        if complete:
+            _snapshot_save(_PLAYERS_SNAPSHOT, {"ts": now, "players": data})
+            _sb_write("players_index", {"ts": now, "players": data})
     elif not complete:
         cached = _PLAYERS_CACHE.get("data") or []
         if cached:
@@ -495,6 +740,29 @@ def version():
         return jsonify({"js": int(m.group(1)) if m else 0})
     except Exception:
         return jsonify({"js": 0})
+
+
+@app.route("/api/client-error", methods=["POST"])
+def client_error():
+    """Client-side error telemetry: the browser POSTs {message, stack, href,
+    version} here when a render crash escapes (e.g. RangeError stack overflows
+    that only reproduce in specific browsers). Appends one JSON line per event
+    to /tmp/cahl_client_errors.log (best-effort; never blocks the client)."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        entry = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "message": str(payload.get("message", ""))[:300],
+            "stack": str(payload.get("stack", ""))[:2000],
+            "href": str(payload.get("href", ""))[:200],
+            "version": payload.get("version", 0),
+            "ua": str(request.headers.get("User-Agent", ""))[:200],
+        }
+        with open("/tmp/cahl_client_errors.log", "a") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
+    return jsonify({"ok": True})
 
 
 @app.route("/api/refresh", methods=["POST"])

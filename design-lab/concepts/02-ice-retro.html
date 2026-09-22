@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f3ead8">
+<title>CAHL — Tonight's Sheet · ICE-RETRO 78</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo+Narrow:wght@500;600;700&family=Spline+Sans+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ICE-RETRO 78 — concept 02 · CAHL Dashboard
+   1970s hockey poster / vintage jersey crest.
+   Surface: Monitor + Explore. Warm cream paper, ink navy,
+   burnt orange. Flat ink only — hard offset shadows, halftone.
+   ============================================================ */
+:root{
+  --paper:#f3ead8;          /* warm cream stock */
+  --paper-hi:#faf4e6;       /* lighter stock for panels */
+  --ink:#002654;            /* ink navy */
+  --ink-soft:#20456f;
+  --ink-faint:#5f7391;
+  --orange:#CE1126;         /* burnt orange */
+  --brick:#8f1420;          /* deep rust for hovers */
+  --gold:#1f4e8a;           /* sparing tertiary (puck ring, star) */
+  --line:#c9bda2;           /* stock-ruled border */
+  --shadow-hard:4px 4px 0 var(--ink);
+  --shadow-hard-sm:3px 3px 0 var(--ink);
+  --font-display:'Archivo Black', 'Arial Black', sans-serif;
+  --font-narrow:'Archivo Narrow', 'Arial Narrow', sans-serif;
+  --font-mono:'Spline Sans Mono', 'Courier New', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--paper);
+  /* halftone dot screen across the whole sheet */
+  background-image:radial-gradient(circle, rgba(26,42,71,.055) 1px, transparent 1.3px);
+  background-size:13px 13px;
+  color:var(--ink);
+  font-family:var(--font-narrow);
+  font-size:16px;
+  line-height:1.35;
+  min-height:100vh;
+}
+/* paper grain — feTurbulence noise, multiply, rides above all */
+.grain{
+  position:fixed;inset:0;pointer-events:none;z-index:90;
+  opacity:.42;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0 0.30 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 14px 64px}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+button:focus-visible, a:focus-visible, input:focus-visible{
+  outline:3px dashed var(--ink);outline-offset:3px;border-radius:2px;
+}
+::selection{background:var(--orange);color:var(--paper-hi)}
+
+/* ---------- jersey stripe bars ---------- */
+.stripes{
+  height:12px;background:var(--ink);
+  background-image:repeating-linear-gradient(90deg,
+    var(--ink) 0 34px, var(--orange) 34px 52px,
+    var(--paper-hi) 52px 58px, var(--orange) 58px 76px);
+}
+.stripes.thin{height:7px}
+
+/* ---------- masthead ---------- */
+.masthead{
+  background:var(--ink);color:var(--paper);
+  /* cream halftone on navy */
+  background-image:radial-gradient(circle, rgba(243,234,216,.13) 1px, transparent 1.4px);
+  background-size:11px 11px;
+  border-top:6px solid var(--orange);
+  border-bottom:6px solid var(--orange);
+}
+.masthead-inner{
+  max-width:1080px;margin:0 auto;padding:16px 14px 14px;
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 22px;
+}
+.brand-block{flex:1 1 300px;min-width:0}
+.brand{
+  font-family:var(--font-display);
+  font-size:clamp(52px,11vw,92px);
+  line-height:.9;letter-spacing:.01em;color:var(--paper);
+  text-shadow:3px 3px 0 var(--orange),6px 6px 0 rgba(0,0,0,.35);
+  text-transform:uppercase;
+}
+.brand-sub{
+  font-family:var(--font-narrow);font-weight:700;
+  text-transform:uppercase;letter-spacing:.22em;
+  font-size:12px;margin-top:8px;color:#c8d0e4;
+}
+.brand-sub b{color:var(--gold)}
+.concept-tag{
+  font-family:var(--font-mono);font-weight:700;font-size:11px;
+  color:var(--gold);border:2px dashed rgba(31,78,138,.65);
+  padding:4px 9px;transform:rotate(-2deg);white-space:nowrap;
+}
+.mast-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.mast-date{
+  font-family:var(--font-mono);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.08em;color:#c8d0e4;
+}
+.games-count{
+  font-family:var(--font-display);font-size:clamp(34px,7vw,52px);
+  line-height:1;color:var(--gold);
+  text-shadow:3px 3px 0 rgba(0,0,0,.4);
+}
+.games-count small{
+  font-family:var(--font-narrow);font-weight:700;font-size:13px;
+  letter-spacing:.18em;color:var(--paper);display:block;text-align:right;
+  text-shadow:none;
+}
+.donkeys-note{
+  max-width:1080px;margin:0 auto;padding:7px 14px 10px;
+  font-family:var(--font-mono);font-weight:700;font-size:11.5px;
+  text-transform:uppercase;letter-spacing:.06em;color:#9fb0d4;
+  border-top:1px dashed rgba(243,234,216,.28);
+}
+.donkeys-note b{color:var(--gold)}
+
+/* ---------- tab bar ---------- */
+.tabbar{display:flex;gap:0;border-bottom:3px solid var(--ink);overflow-x:auto;scrollbar-width:none}
+.tabbar::-webkit-scrollbar{display:none}
+.tab{
+  font-family:var(--font-display);font-size:15px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-soft);
+  padding:12px 16px 10px;position:relative;white-space:nowrap;
+  border-top:4px solid transparent;
+}
+.tab[aria-selected="true"]{color:var(--ink);background:var(--paper-hi);border-top-color:var(--orange)}
+.tab[aria-selected="true"]::after{
+  content:"";position:absolute;left:0;right:0;bottom:-3px;height:3px;background:var(--ink);
+}
+.tab .num{font-family:var(--font-mono);font-size:10px;vertical-align:super;color:var(--orange)}
+.tab-scope{
+  display:none;margin:10px 0 0;padding:6px 12px;width:max-content;max-width:100%;
+  font-family:var(--font-mono);font-weight:700;font-size:11px;text-transform:uppercase;
+  color:var(--brick);border:2px dashed var(--brick);transform:rotate(-1.5deg);
+}
+.tab-scope.show{display:block;animation:thump .38s cubic-bezier(.2,1.6,.4,1)}
+
+/* ---------- puck clock (signature) ---------- */
+.clockdeck{
+  margin:18px 0 14px;background:var(--paper-hi);
+  border:3px solid var(--ink);box-shadow:var(--shadow-hard);
+  padding:14px 14px 12px;position:relative;
+}
+.clockdeck-label{
+  position:absolute;top:-12px;left:12px;background:var(--ink);color:var(--paper);
+  font-family:var(--font-display);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;padding:3px 10px;
+}
+.deck-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.deck-now{font-family:var(--font-mono);font-weight:700;font-size:22px;min-width:96px}
+.deck-now .mer{color:var(--orange);font-size:14px}
+.deck-hint{font-size:12.5px;color:var(--ink-faint);font-weight:600;letter-spacing:.02em;flex:1 1 160px;min-width:140px}
+.rink{position:relative;flex:1 1 100%;padding:10px 0 2px}
+input[type=range].puck{
+  -webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;cursor:grab;
+}
+input[type=range].puck:active{cursor:grabbing}
+/* the rink surface */
+input[type=range].puck::-webkit-slider-runnable-track{
+  height:14px;background:
+    repeating-linear-gradient(90deg, rgba(26,42,71,.38) 0 2px, transparent 2px calc((100% - 2px)/15)),
+    linear-gradient(#dfe7f3,#dfe7f3); /* hard flat ice */
+  border:2px solid var(--ink);
+  /* center red line + blue lines, rink style */
+  box-shadow:inset 0 0 0 1px rgba(26,42,71,.15);
+}
+input[type=range].puck::-moz-range-track{
+  height:14px;border:2px solid var(--ink);
+  background:repeating-linear-gradient(90deg, rgba(26,42,71,.38) 0 2px, transparent 2px calc((100% - 2px)/15)),#dfe7f3;
+}
+input[type=range].puck::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:30px;height:30px;border-radius:50%;
+  background:var(--ink);
+  border:3px solid var(--gold);
+  box-shadow:3px 3px 0 rgba(26,42,71,.35);
+  margin-top:-12px;
+}
+input[type=range].puck::-moz-range-thumb{
+  width:24px;height:24px;border-radius:50%;
+  background:var(--ink);border:3px solid var(--gold);
+  box-shadow:3px 3px 0 rgba(26,42,71,.35);
+}
+.rink-ticks{display:flex;justify-content:space-between;font-family:var(--font-mono);font-weight:700;font-size:10.5px;color:var(--ink-faint);padding:2px 2px 0}
+.btn-live{
+  font-family:var(--font-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--orange);color:var(--paper-hi);border:3px solid var(--ink);
+  box-shadow:var(--shadow-hard-sm);padding:8px 14px;display:none;
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.btn-live.show{display:inline-block;animation:thump .4s cubic-bezier(.2,1.6,.4,1)}
+.btn-live:hover{background:var(--brick);transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+.btn-live:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+
+/* ---------- controls: status filter + search + venue ---------- */
+.controls{margin:4px 0 14px;display:flex;flex-direction:column;gap:10px}
+.seg{display:flex;border:3px solid var(--ink);width:max-content;max-width:100%;background:var(--paper-hi);box-shadow:var(--shadow-hard-sm);overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{
+  font-family:var(--font-display);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:9px 14px;color:var(--ink-soft);border-right:2px solid var(--ink);white-space:nowrap;
+  transition:transform .1s ease;
+}
+.seg button:last-child{border-right:none}
+.seg button:hover{color:var(--brick)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.seg button .n{font-family:var(--font-mono);font-size:10px;color:var(--orange);margin-left:5px}
+.seg button[aria-pressed="true"] .n{color:var(--gold)}
+.searchline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.search{
+  flex:1 1 220px;max-width:420px;border:3px solid var(--ink);background:var(--paper-hi);
+  padding:9px 12px;font-family:var(--font-mono);font-weight:700;font-size:14px;
+  text-transform:uppercase;letter-spacing:.04em;color:var(--ink);box-shadow:var(--shadow-hard-sm);
+}
+.search::placeholder{color:var(--ink-faint);font-weight:500}
+.result-line{
+  font-family:var(--font-mono);font-weight:700;font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-soft);
+}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  font-family:var(--font-mono);font-weight:700;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;
+  border:2px solid var(--ink);background:var(--paper-hi);padding:6px 12px;white-space:nowrap;
+  transition:transform .1s ease, box-shadow .1s ease;
+}
+.chip .n{color:var(--orange)}
+.chip:hover{transform:translate(-1px,-1px);box-shadow:2px 2px 0 var(--ink)}
+.chip[aria-pressed="true"]{background:var(--orange);color:var(--paper-hi)}
+.chip[aria-pressed="true"] .n{color:var(--paper-hi)}
+
+/* ---------- section heads ---------- */
+.sec-head{display:flex;align-items:center;gap:12px;margin:26px 0 12px}
+.sec-title{
+  font-family:var(--font-display);font-size:clamp(21px,4.6vw,30px);
+  text-transform:uppercase;letter-spacing:.01em;white-space:nowrap;
+}
+.sec-title .thin{color:var(--orange)}
+.sec-rule{flex:1;height:8px;background:var(--ink);
+  background-image:repeating-linear-gradient(90deg,var(--ink) 0 22px,var(--orange) 22px 34px);
+}
+
+/* ---------- game sheet rows ---------- */
+.sheet{list-style:none;display:flex;flex-direction:column;gap:10px}
+.game{
+  background:var(--paper-hi);border:3px solid var(--ink);position:relative;
+  transition:transform .14s ease, box-shadow .14s ease;
+}
+.game:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.game.open{box-shadow:6px 6px 0 var(--ink)}
+.game-head{
+  width:100%;display:grid;text-align:left;gap:6px 12px;padding:12px 14px;
+  grid-template-columns:auto 1fr auto;grid-template-areas:
+    "time teams status"
+    "meta meta status";
+  align-items:center;
+}
+/* ticket-stub time chip */
+.stub{
+  grid-area:time;font-family:var(--font-mono);font-weight:700;font-size:14px;line-height:1.1;
+  border:2px dashed var(--ink);background:var(--paper);padding:7px 10px;text-align:center;
+  position:relative;min-width:74px;
+}
+.stub .mer{display:block;font-size:10.5px;letter-spacing:.18em;color:var(--orange)}
+.teams{grid-area:teams;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;min-width:0}
+.team{
+  font-family:var(--font-display);font-size:clamp(13.5px,3.4vw,17px);line-height:1.15;
+  text-transform:uppercase;letter-spacing:.01em;
+  display:flex;align-items:center;gap:8px;min-width:0;
+}
+.team.home{justify-content:flex-end;text-align:right}
+.team .tname{overflow-wrap:anywhere}
+.puck-ico{
+  width:13px;height:13px;border-radius:50%;flex:0 0 auto;
+  background:var(--ink);border:2px solid var(--gold);box-shadow:1.5px 1.5px 0 rgba(26,42,71,.3);
+}
+.at{
+  font-family:var(--font-mono);font-weight:700;font-size:12px;color:var(--ink-faint);
+}
+.score{
+  font-family:var(--font-mono);font-weight:700;font-size:clamp(20px,5vw,26px);
+  min-width:44px;text-align:center;font-variant-numeric:tabular-nums;
+}
+.score.dim{color:var(--ink-faint)}
+.score.lead{color:var(--brick)}
+.meta{grid-area:meta;font-family:var(--font-mono);font-weight:700;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);display:flex;gap:14px;flex-wrap:wrap}
+.meta .venue{color:var(--ink-soft)}
+/* status stamps */
+.stamp{
+  grid-area:status;justify-self:end;align-self:center;
+  font-family:var(--font-display);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  padding:6px 10px;border:2px solid var(--ink);transform:rotate(3deg);white-space:nowrap;
+  display:flex;align-items:center;gap:7px;
+}
+.stamp.live{background:var(--orange);color:var(--paper-hi);border-color:var(--ink);animation:stampIn .45s cubic-bezier(.2,1.7,.4,1)}
+.stamp.up{border-style:dashed;color:var(--ink-soft);background:var(--paper)}
+.stamp.final{background:var(--ink);color:var(--paper)}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--paper-hi);animation:ping 1.6s ease-out infinite}
+.stamp.final .clock{font-family:var(--font-mono);font-weight:700}
+.expand-ico{
+  grid-area:status;justify-self:end;margin-top:34px;font-family:var(--font-mono);font-size:11px;
+  color:var(--ink-faint);letter-spacing:.05em;
+}
+.game-head:hover .expand-ico{color:var(--brick)}
+/* live period line under teams for live games */
+.live-line{
+  grid-column:1 / -1;font-family:var(--font-mono);font-weight:700;font-size:11px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--brick);
+  display:flex;align-items:center;gap:8px;
+}
+.live-bar{flex:1;max-width:220px;height:6px;border:2px solid var(--ink);background:var(--paper)}
+.live-bar i{display:block;height:100%;background:var(--orange)}
+
+/* row body (expand) */
+.game-body{
+  border-top:2px dashed var(--ink);background:var(--paper);
+  padding:12px 14px;display:grid;gap:10px;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+}
+.stat-cell{min-width:0}
+.stat-cell h4{font-family:var(--font-mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:3px}
+.stat-cell p{font-family:var(--font-mono);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.shots{display:flex;align-items:center;gap:8px}
+.shots .sof{font-size:11px;color:var(--ink-faint)}
+.momentum{display:flex;gap:3px;align-items:flex-end;height:26px}
+.momentum i{width:7px;background:var(--ink)}
+.momentum i.a{background:var(--orange)}
+.momentum i.h{background:var(--ink)}
+/* empty state */
+.empty{
+  border:3px dashed var(--ink);background:var(--paper-hi);padding:34px 18px;text-align:center;
+}
+.empty .stamp-big{
+  display:inline-block;font-family:var(--font-display);font-size:20px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--brick);border:3px solid var(--brick);
+  padding:10px 18px;transform:rotate(-4deg);margin-bottom:12px;
+}
+.empty p{font-family:var(--font-mono);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft)}
+
+/* ---------- leaders strip: stamp badges ---------- */
+.leaders{display:flex;gap:16px;overflow-x:auto;padding:14px 4px 18px;scrollbar-width:none}
+.leaders::-webkit-scrollbar{display:none}
+.badge{
+  flex:0 0 auto;width:172px;background:var(--paper-hi);border:3px solid var(--ink);
+  box-shadow:var(--shadow-hard);padding:14px 12px 12px;text-align:center;position:relative;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.badge:nth-child(odd){transform:rotate(-2.4deg)}
+.badge:nth-child(even){transform:rotate(1.8deg)}
+.badge:hover{transform:rotate(0) translate(-2px,-3px);box-shadow:6px 6px 0 var(--ink)}
+.badge .rank{
+  position:absolute;top:-12px;left:-10px;width:30px;height:30px;border-radius:50%;
+  background:var(--orange);color:var(--paper-hi);font-family:var(--font-display);font-size:14px;
+  display:flex;align-items:center;justify-content:center;border:2px solid var(--ink);
+}
+.badge.r1{background:var(--ink);color:var(--paper)}
+.badge.r1 .pts{color:var(--gold)}
+.badge .halftone{
+  position:absolute;inset:4px;pointer-events:none;
+  background:radial-gradient(circle, rgba(26,42,71,.07) 1px, transparent 1.3px);
+  background-size:7px 7px;
+}
+.badge .pts{
+  font-family:var(--font-display);font-size:52px;line-height:1;color:var(--orange);
+  text-shadow:3px 3px 0 rgba(26,42,71,.18);
+}
+.badge .pts-lbl{font-family:var(--font-mono);font-weight:700;font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-faint);margin:2px 0 8px}
+.badge .pname{font-family:var(--font-display);font-size:14.5px;line-height:1.2;text-transform:uppercase}
+.badge .pteam{
+  font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--brick);margin-top:5px;border-top:2px dashed var(--line);padding-top:6px;
+}
+.badge.r1 .pteam{color:var(--gold);border-top-color:rgba(224,164,41,.4)}
+
+/* ---------- footer ---------- */
+.footer{
+  margin-top:34px;border-top:3px solid var(--ink);padding-top:12px;
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  font-family:var(--font-mono);font-weight:700;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-faint);
+}
+.footer .c2{color:var(--orange)}
+
+/* ---------- motion ---------- */
+@keyframes thump{
+  0%{transform:scale(1.7) rotate(var(--rot,0deg));opacity:0}
+  60%{transform:scale(.94) rotate(var(--rot,0deg));opacity:1}
+  100%{transform:scale(1) rotate(var(--rot,0deg))}
+}
+@keyframes stampIn{
+  0%{transform:rotate(9deg) scale(1.8);opacity:0}
+  62%{transform:rotate(2.4deg) scale(.95);opacity:1}
+  100%{transform:rotate(3deg) scale(1)}
+}
+@keyframes ping{
+  0%{box-shadow:0 0 0 0 rgba(243,234,216,.7)}
+  100%{box-shadow:0 0 0 9px rgba(243,234,216,0)}
+}
+@keyframes riseIn{
+  0%{opacity:0;transform:translateY(10px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+.anim-in{animation:riseIn .3s ease both}
+.stagger .badge{animation:thump .5s cubic-bezier(.2,1.6,.4,1) both}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .pulse{box-shadow:none}
+}
+
+/* ---------- desktop ---------- */
+@media (min-width: 760px){
+  .wrap{padding:0 20px 72px}
+  .controls{flex-direction:column;gap:12px}
+  .controls-row{display:flex;align-items:center;gap:14px}
+  .game-head{
+    padding:13px 18px;gap:14px;
+    grid-template-columns:96px minmax(0,1.35fr) 48px auto 48px minmax(0,1.35fr) 128px;
+    grid-template-areas:"time away sa at sb home status";
+  }
+  .teams{display:contents}
+  .team.away{grid-area:away}
+  .score.sa{grid-area:sa}
+  .at{grid-area:at;justify-self:center}
+  .score.sb{grid-area:sb}
+  .team.home{grid-area:home}
+  .stamp{grid-area:status}
+  .expand-ico{display:none}
+  .meta{display:none}
+  .live-line{grid-column:2 / -1}
+  .leaders{flex-wrap:wrap;justify-content:center;gap:22px}
+  .badge{width:186px}
+  .brand{font-size:84px}
+}
+/* mobile refinements @390 */
+@media (max-width: 430px){
+  .game-head{grid-template-columns:78px 1fr auto;grid-template-areas:"time teams status" "meta meta meta"}
+  .stub{min-width:66px;padding:6px 6px;font-size:13px}
+  .stamp{font-size:10.5px;padding:5px 8px}
+  .expand-ico{display:none}
+  .meta{margin-top:2px}
+  .deck-now{font-size:19px;min-width:84px}
+  .badge{width:160px}
+  .leaders{gap:14px}
+}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand-block">
+      <div class="brand">CAHL</div>
+      <div class="brand-sub">Chiller Adult Hockey League · Columbus, OH · <b>Tonight's Sheet</b></div>
+    </div>
+    <div class="mast-right">
+      <span class="concept-tag">CONCEPT 02 — ICE-RETRO 78</span>
+      <span class="mast-date" id="mastDate">WED · SEP 2 · 2026</span>
+      <div class="games-count"><span id="countGames">0</span><small>GAMES TONIGHT</small></div>
+    </div>
+  </div>
+  <div class="donkeys-note">SWAMP DONKEYS — no game tonight · next skate: <b>THU 9:20 PM @ DUBLIN</b></div>
+</header>
+<div class="stripes" aria-hidden="true"></div>
+
+<nav class="tabbar wrap" style="padding-left:14px;padding-right:14px" aria-label="Sections">
+  <button class="tab" aria-selected="true" data-tab="today">Today <span class="num">15</span></button>
+  <button class="tab" aria-selected="false" data-tab="league">League</button>
+  <button class="tab" aria-selected="false" data-tab="team">Team</button>
+  <button class="tab" aria-selected="false" data-tab="players">Players</button>
+  <button class="tab" aria-selected="false" data-tab="analytics">Analytics</button>
+</nav>
+
+<main class="wrap">
+  <div class="tab-scope" id="tabScope" role="status"></div>
+
+  <!-- SIGNATURE: PUCK CLOCK — drag the puck, tonight re-stamps itself -->
+  <section class="clockdeck" aria-label="Game clock scrubber">
+    <span class="clockdeck-label">Puck Clock — drag to time-travel tonight</span>
+    <div class="deck-row">
+      <span class="deck-now"><span id="clockTime">9:47</span><span class="mer" id="clockMer">PM</span></span>
+      <span class="deck-hint">Every game re-stamps to match the clock: UP NEXT → LIVE → FINAL</span>
+      <button class="btn-live" id="btnLive">▶ Return to live</button>
+    </div>
+    <div class="rink">
+      <input type="range" class="puck" id="puck" min="1200" max="1480" step="1" value="1307"
+             aria-label="Demo game clock — drag to scrub through tonight's games">
+      <div class="rink-ticks" aria-hidden="true">
+        <span>8 PM</span><span>9</span><span>10</span><span>11</span><span>12</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="controls">
+    <div class="controls-row">
+      <div class="seg" role="group" aria-label="Filter by game status" id="statusSeg">
+        <button aria-pressed="true" data-status="all">All <span class="n" id="nAll">15</span></button>
+        <button aria-pressed="false" data-status="live">Live <span class="n" id="nLive">2</span></button>
+        <button aria-pressed="false" data-status="up">Up next <span class="n" id="nUp">13</span></button>
+        <button aria-pressed="false" data-status="final">Final <span class="n" id="nFinal">0</span></button>
+      </div>
+      <span class="result-line" id="resultLine" aria-live="polite">SHOWING 15 / 15 GAMES</span>
+    </div>
+    <div class="searchline">
+      <input class="search" id="search" type="search" placeholder="FIND YOUR TEAM TONIGHT…"
+             aria-label="Search tonight's games by team name">
+      <div class="chips" role="group" aria-label="Filter by rink" id="venueChips"></div>
+    </div>
+  </div>
+
+  <div class="sec-head">
+    <h2 class="sec-title">Today's <span class="thin">Games</span></h2>
+    <div class="sec-rule" aria-hidden="true"></div>
+  </div>
+  <ul class="sheet" id="sheet"></ul>
+
+  <div class="sec-head">
+    <h2 class="sec-title">Tonight's <span class="thin">Stampeders</span></h2>
+    <div class="sec-rule" aria-hidden="true"></div>
+  </div>
+  <div class="leaders stagger" id="leaders"></div>
+
+  <footer class="footer">
+    <span>CAHL · ICE-RETRO 78 — CONCEPT 02</span>
+    <span class="c2">DEMO SHEET · SCORES SIMULATED</span>
+  </footer>
+</main>
+
+<script>
+"use strict";
+/* ================= DATA — tonight's 15 real matchups (ET) ================= */
+const GAMES = [
+  {t:1240, a:"Cyclones",            h:"Goalie Guacamole",            v:"EASTON", div:"D-LEAGUE"},
+  {t:1300, a:"Parking Lot Beers",   h:"Triple D",                    v:"EASTON", div:"C-LEAGUE"},
+  {t:1310, a:"Dayton Hawks",        h:"Dayton Fire",                 v:"DAYTON", div:"D-LEAGUE"},
+  {t:1310, a:"C Black Pizza (Saucy)",h:"Carlucci's Pizza Red",       v:"DUBLIN", div:"C-LEAGUE"},
+  {t:1320, a:"Busch League",        h:"Brew Jackets",                v:"NORTH",  div:"D-LEAGUE"},
+  {t:1320, a:"The Beer Barrel Boys",h:"Gang Green",                  v:"DUBLIN", div:"D-LEAGUE"},
+  {t:1320, a:"Goose Eggs",          h:"The Scorners",                v:"EASTON", div:"C-LEAGUE"},
+  {t:1320, a:"Whiskey Warriors",    h:"Vandelay Industries",         v:"NORTH",  div:"C-LEAGUE"},
+  {t:1325, a:"Cyclops",             h:"Goodfellas",                  v:"EASTON", div:"D-LEAGUE"},
+  {t:1350, a:"Shakers Raw Dogs",    h:"The Chicken Selects",         v:"DUBLIN", div:"C-LEAGUE"},
+  {t:1350, a:"Bu-Hockkey BT5",      h:"T5P Hockey",                  v:"NORTH",  div:"D-LEAGUE"},
+  {t:1370, a:"Winking Lizard",      h:"Birdie Juicers",              v:"EASTON", div:"C-LEAGUE"},
+  {t:1380, a:"Puck Buddies",        h:"The tip in",                  v:"DUBLIN", div:"D-LEAGUE"},
+  {t:1390, a:"Brewins",             h:"The Wobbly Pirates",          v:"NORTH",  div:"C-LEAGUE"},
+  {t:1390, a:"CockTails and Dreams",h:"Goal Train",                  v:"EASTON", div:"D-LEAGUE"}
+];
+/* curated demo scores for the two LIVE games */
+const CURATED = {
+  0:{live:{a:4,h:2,per:3,clock:"4:38"},final:{a:5,h:2}},
+  1:{live:{a:1,h:1,per:1,clock:"13:22"},final:{a:3,h:2}}
+};
+const LEADERS = [
+  {n:"William Vonderahe", team:"Black and Tan", p:5},
+  {n:"Brandon Spickler",  team:"Hamilton Mustangs Thu", p:4},
+  {n:"Will Wuotila",      team:"Fluffers", p:4},
+  {n:"John Kemp",         team:"Black and Tan", p:3},
+  {n:"Matthew Brancaleone", team:"Hamilton Mustangs Thu", p:2}
+];
+const NOW = 1307;                 // demo "now" = 9:47 PM ET
+const DUR = 90;                   // real minutes per game slot
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+function fmtT(m){ // minutes -> "9:47 PM"
+  let h = Math.floor(m/60), mm = String(m%60).padStart(2,"0");
+  const mer = h >= 12 ? "PM" : "AM";
+  let h12 = h % 12; if(h12 === 0) h12 = 12;
+  return {h:h12, mm, mer};
+}
+function hash(s){ let x=0; for(let i=0;i<s.length;i++){x=(x*31+s.charCodeAt(i))>>>0;} return x; }
+/* deterministic plausible score for a finished game */
+function scoreFor(g){
+  if(CURATED[GAMES.indexOf(g)]) return CURATED[GAMES.indexOf(g)].final;
+  const h = hash(g.a+g.h);
+  const a = 1 + (h % 5);          // 1..5
+  const hb = 1 + ((h >> 5) % 4);  // 1..4
+  return {a, h: hb === a ? hb+1 : hb}; // no ties in the sheet
+}
+function shotsFor(g){
+  const h = hash(g.a+g.h+"sh");
+  return {a: 18 + (h % 16), h: 18 + ((h>>4) % 16)};
+}
+/* derive live game state at clock minute m */
+function liveState(g, m){
+  const c = CURATED[GAMES.indexOf(g)];
+  if(c && c.live){
+    const s = c.live;
+    return {state:"live", a:s.a, h:s.h, per:s.per, clock:s.clock,
+            frac:(s.per-1)/3 + (1 - pctClock(s.clock))/3};
+  }
+  const el = m - g.t;                       // real minutes elapsed
+  const per = el < 28 ? 1 : el < 58 ? 2 : 3;
+  const inPer = per===1 ? el : per===2 ? el-30 : el-60;   // ~28-30 min real per period
+  const remain = Math.max(0, 20 - Math.round(inPer*(20/29)));
+  const clock = String(Math.floor(remain)).padStart(2,"0")+":"+String(Math.round((remain%1)*60)).padStart(2,"0");
+  const base = scoreFor(g);
+  const sofar = s => Math.min(s, Math.max(0, Math.round(s * Math.min(1, (inPer+2)/20))));
+  return {state:"live", a:sofar(base.a), h:sofar(base.h), per, clock,
+          frac:Math.min(1, el/DUR)};
+}
+function pctClock(str){ const p=str.split(":"); return (Number(p[0])+Number(p[1])/60)/20; }
+function gameState(g, m){
+  if(m >= g.t + DUR) return Object.assign({state:"final"}, scoreFor(g));
+  if(m > g.t) return liveState(g, m);
+  return {state:"up"};
+}
+
+/* ================= state ================= */
+const S = {status:"all", venue:"ALL", q:"", clock:NOW};
+const VENUES = ["ALL", ...new Set(GAMES.map(g=>g.v))];
+
+/* ================= render: sheet ================= */
+const sheet = $("#sheet");
+function renderSheet(){
+  const m = S.clock;
+  const items = GAMES.map((g,i)=>({g,i,st:gameState(g,m)}))
+    .filter(({st,g}) =>
+      (S.status==="all" || st.state===(S.status==="up"?"up":S.status)) &&
+      (S.venue==="ALL" || g.v===S.venue) &&
+      (!S.q || (g.a+" "+g.h).toLowerCase().includes(S.q))
+    );
+  sheet.innerHTML = "";
+  $("#resultLine").textContent = `SHOWING ${items.length} / ${GAMES.length} GAMES · ${fmtClock(m)}`;
+  if(!items.length){
+    sheet.innerHTML = `<li class="empty"><div class="stamp-big">NOTHING ON THE SHEET</div>
+      <p>No games match that combo — loosen a filter or drag the puck clock.</p></li>`;
+    return;
+  }
+  items.forEach(({g,i,st},idx)=>{
+    const li = document.createElement("li");
+    li.className = "game";
+    const time = fmtT(g.t);
+    const sa = st.state==="up" ? "—" : st.a;
+    const sb = st.state==="up" ? "—" : st.h;
+    const saCls = st.state!=="up" && st.a>st.h ? "lead" : "";
+    const sbCls = st.state!=="up" && st.h>st.a ? "lead" : "";
+    let stampHTML;
+    if(st.state==="live"){
+      stampHTML = `<span class="stamp live"><span class="pulse" aria-hidden="true"></span>LIVE · P${st.clock}</span>`;
+    } else if(st.state==="final"){
+      stampHTML = `<span class="stamp final">FINAL</span>`;
+    } else {
+      stampHTML = `<span class="stamp up">${time.h}:${time.mm} ${time.mer}</span>`;
+    }
+    const perNames = ["","1ST","2ND","3RD"];
+    const liveLine = st.state==="live"
+      ? `<div class="live-line"><span>${perNames[st.per]} · ${st.clock} LEFT</span>
+           <span class="live-bar"><i style="width:${Math.round((st.frac||0)*100)}%"></i></span></div>` : "";
+    const shots = st.state!=="up" ? shotsFor(g) : null;
+    const body = `<div class="game-body" hidden>
+        <div class="stat-cell"><h4>Rink</h4><p>${g.v} · SHEET B</p></div>
+        <div class="stat-cell"><h4>Division</h4><p>${g.div}</p></div>
+        ${shots ? `<div class="stat-cell"><h4>Shots</h4>
+          <div class="shots"><span>${shots.a}</span><span class="sof">SA</span>
+          <span style="color:var(--ink-faint)">·</span><span>${shots.h}</span><span class="sof">SH</span></div></div>
+        <div class="stat-cell"><h4>Period chances</h4>
+          <div class="momentum" aria-hidden="true">${momentumBars(g)}</div></div>` : ""}
+        ${st.state==="up" ? `<div class="stat-cell"><h4>Status</h4><p>DOORS 30 MIN PRIOR</p></div>` : ""}
+      </div>`;
+    li.innerHTML = `
+      <button class="game-head" aria-expanded="false" data-i="${i}">
+        <span class="stub">${time.h}:${time.mm}<span class="mer">${time.mer} ET</span></span>
+        <span class="teams">
+          <span class="team away"><span class="puck-ico" aria-hidden="true"></span><span class="tname">${g.a}</span></span>
+          <span class="score sa ${saCls}">${sa}</span>
+          <span class="at">@</span>
+          <span class="score sb ${sbCls}">${sb}</span>
+          <span class="team home"><span class="tname">${g.h}</span></span>
+        </span>
+        ${stampHTML}
+        <span class="expand-ico" aria-hidden="true">SHEET ▾</span>
+        ${liveLine}
+        <span class="meta"><span class="venue">${g.v}</span><span>${g.div}</span><span>SHEET B</span></span>
+      </button>
+      ${body}`;
+    sheet.appendChild(li);
+    if(!REDUCED){
+      li.style.animation = "riseIn .3s ease both";
+      li.style.animationDelay = Math.min(idx*28, 420)+"ms";
+    }
+  });
+}
+function momentumBars(g){
+  const h = hash(g.a+g.h+"mo"); let out="";
+  for(let k=0;k<9;k++){
+    const v = 4 + ((h >> k) % 20);
+    out += `<i class="${k%2?"a":"h"}" style="height:${v}px"></i>`;
+  }
+  return out;
+}
+/* expand/collapse (event delegation — survives re-renders) */
+sheet.addEventListener("click", e=>{
+  const head = e.target.closest(".game-head");
+  if(!head) return;
+  const body = head.nextElementSibling;
+  const open = head.getAttribute("aria-expanded") === "true";
+  head.setAttribute("aria-expanded", String(!open));
+  body.hidden = open;
+  head.parentElement.classList.toggle("open", !open);
+});
+
+/* ================= render: leaders ================= */
+function renderLeaders(){
+  const wrap = $("#leaders"); wrap.innerHTML = "";
+  LEADERS.forEach((L,i)=>{
+    const b = document.createElement("div");
+    b.className = "badge" + (i===0 ? " r1" : "");
+    b.style.setProperty("--rot", i%2 ? "1.8deg" : "-2.4deg");
+    if(!REDUCED) b.style.animationDelay = (120 + i*90)+"ms";
+    b.innerHTML = `
+      <span class="halftone" aria-hidden="true"></span>
+      <span class="rank" aria-hidden="true">${i+1}</span>
+      <div class="pts" data-count="${L.p}">0</div>
+      <div class="pts-lbl">PTS TONIGHT</div>
+      <div class="pname">${L.n}</div>
+      <div class="pteam">${L.team}</div>`;
+    wrap.appendChild(b);
+  });
+  countUpAll(wrap);
+}
+function countUpAll(scope){
+  scope.querySelectorAll("[data-count]").forEach(el=>{
+    const target = Number(el.dataset.count);
+    if(REDUCED || target===0){ el.textContent = target; return; }
+    const t0 = performance.now(), dur = 900;
+    (function tick(t){
+      const k = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-k,3);
+      el.textContent = Math.round(target*e);
+      if(k<1) requestAnimationFrame(tick);
+    })(t0);
+  });
+}
+
+/* ================= puck clock ================= */
+const puck = $("#puck");
+function fmtClock(m){
+  const t = fmtT(Math.min(m,1439));
+  return `${t.h}:${t.mm} ${t.mer}`;
+}
+function renderClock(){
+  const m = Number(puck.value);
+  S.clock = m;
+  $("#clockTime").textContent = fmtT(Math.min(m,1439)).h+":"+fmtT(Math.min(m,1439)).mm;
+  $("#clockMer").textContent = fmtT(Math.min(m,1439)).mer;
+  puck.setAttribute("aria-valuetext", fmtClock(m));
+  const off = Math.abs(m-NOW) > 3;
+  $("#btnLive").classList.toggle("show", off);
+  renderSheet(); renderCounts();
+}
+let scrubbed = false;
+puck.addEventListener("input", ()=>{ scrubbed = true; renderClock(); });
+$("#btnLive").addEventListener("click", ()=>{
+  puck.value = NOW; scrubbed = false; renderClock();
+  if(!REDUCED){ const d=$(".clockdeck"); d.style.animation="thump .4s cubic-bezier(.2,1.6,.4,1)";
+    setTimeout(()=>d.style.animation="",450); }
+});
+
+/* ================= filters ================= */
+$("#statusSeg").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-status]"); if(!b) return;
+  S.status = b.dataset.status;
+  $("#statusSeg").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed", String(x===b)));
+  renderSheet(); renderCounts();
+});
+const chipWrap = $("#venueChips");
+VENUES.forEach(v=>{
+  const n = v==="ALL" ? GAMES.length : GAMES.filter(g=>g.v===v).length;
+  const c = document.createElement("button");
+  c.className = "chip"; c.dataset.venue = v;
+  c.setAttribute("aria-pressed", String(v==="ALL"));
+  c.innerHTML = `${v==="ALL"?"ALL RINKS":v} <span class="n">${n}</span>`;
+  chipWrap.appendChild(c);
+});
+chipWrap.addEventListener("click", e=>{
+  const c = e.target.closest(".chip"); if(!c) return;
+  S.venue = c.dataset.venue;
+  chipWrap.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed", String(x===c)));
+  renderSheet(); renderCounts();
+});
+$("#search").addEventListener("input", e=>{
+  S.q = e.target.value.trim().toLowerCase();
+  renderSheet(); renderCounts();
+});
+function renderCounts(){
+  const m = S.clock;
+  let live=0, up=0, fin=0;
+  GAMES.forEach(g=>{ const st=gameState(g,m);
+    if(st.state==="live")live++; else if(st.state==="final")fin++; else up++; });
+  $("#nLive").textContent=live; $("#nUp").textContent=up; $("#nFinal").textContent=fin;
+  $("#nAll").textContent=GAMES.length;
+}
+
+/* ================= tab scope stamps ================= */
+const SCOPE = {
+  league:"CONCEPT SHEET 02 COVERS TONIGHT — league tables land with the full redesign",
+  team:"SWAMP DONKEYS ROSTER VIEW ARRIVES IN THE FULL BUILD",
+  players:"5,930-PLAYER LEADERBOARD IS CONCEPT 02'S NEXT SHEET",
+  analytics:"ANALYTICS WALL IS BEING RESTAMPED — CHECK BACK"
+};
+$(".tabbar").addEventListener("click", e=>{
+  const t = e.target.closest(".tab"); if(!t) return;
+  if(t.dataset.tab !== "today"){
+    const s = $("#tabScope");
+    s.textContent = SCOPE[t.dataset.tab];
+    s.classList.remove("show"); void s.offsetWidth; // restart thump
+    s.classList.add("show");
+    clearTimeout(s._t); s._t = setTimeout(()=>s.classList.remove("show"), 2600);
+  }
+});
+
+/* ================= boot ================= */
+$("#mastDate").textContent = "WED · SEP 2 · 2026 · ET";
+function boot(){
+  renderLeaders();
+  renderClock();
+  if(!REDUCED){
+    const c = $("#countGames"), t0 = performance.now();
+    (function tick(t){
+      const k = Math.min(1,(t-t0)/1100), e = 1-Math.pow(1-k,3);
+      c.textContent = Math.round(15*e);
+      if(k<1) requestAnimationFrame(tick); else c.textContent = 15;
+    })(t0);
+  } else { $("#countGames").textContent = 15; }
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f141c">
+<title>CAHL — Playoff Intensity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,500;0,600;0,700&family=Saira+Condensed:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f141c;
+  --bg2:#0b0f16;
+  --panel:#151b26;
+  --panel2:#1b2230;
+  --ink:#f2f0ec;
+  --dim:#9b9aa3;
+  --faint:#6b6a73;
+  --hot:#CE1126;
+  --hot-dk:#8f1420;
+  --ice:#4d7fc4;
+  --gold:#A2AAAD;
+  --grn:#CE1126;
+  --line:#232c3c;
+  --slant:-1.2deg;
+  --f-disp:'Saira Condensed',Impact,sans-serif;
+  --f-ui:'Chakra Petch',monospace,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--f-ui);
+  font-size:15px;
+  line-height:1.45;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+::selection{background:var(--hot);color:#fff}
+a{color:var(--ice);text-decoration:none}
+
+/* ============ TOP BAR ============ */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:var(--bg2);
+  border-bottom:1px solid var(--line);
+}
+.topbar-inner{
+  max-width:1180px;margin:0 auto;
+  padding:10px 16px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;transform:skewX(-6deg)}
+.brand-mark{
+  font-family:var(--f-disp);font-weight:900;font-size:26px;letter-spacing:.5px;
+  color:var(--ink);
+  background:var(--hot);
+  padding:2px 12px;
+  clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);
+  line-height:1.2;
+}
+.brand-sub{
+  font-family:var(--f-ui);font-size:10px;letter-spacing:2.5px;color:var(--dim);text-transform:uppercase;font-weight:600;
+}
+.clock{
+  margin-left:auto;
+  font-family:var(--f-disp);font-weight:700;font-size:15px;
+  color:var(--ice);letter-spacing:1px;
+  display:flex;align-items:center;gap:8px;
+}
+.clock .dot{width:7px;height:7px;background:var(--grn);border-radius:50%;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(206,17,38,.5)}50%{opacity:.5;box-shadow:0 0 0 4px rgba(206,17,38,0)}}
+
+/* ============ NAV ============ */
+nav.tabs{max-width:1180px;margin:0 auto;padding:0 16px;display:flex;gap:2px;overflow-x:auto}
+nav.tabs a{
+  font-family:var(--f-disp);font-weight:700;font-size:16px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--dim);padding:8px 14px 10px;position:relative;white-space:nowrap;
+  clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);
+}
+nav.tabs a.on{color:#fff;background:var(--panel2)}
+nav.tabs a.on::after{content:'';position:absolute;left:14px;right:14px;bottom:4px;height:3px;background:var(--hot)}
+nav.tabs a:hover{color:var(--ink)}
+
+/* ============ SHELL ============ */
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+
+/* section header: diagonal cut headline bar */
+.sec-head{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  margin:26px 0 14px;
+  transform:skewX(-6deg);
+  transform-origin:left bottom;
+}
+.sec-head h1,.sec-head h2{
+  font-family:var(--f-disp);font-weight:900;text-transform:uppercase;
+  letter-spacing:1px;line-height:1;
+}
+.sec-head h1{font-size:clamp(30px,6vw,44px)}
+.sec-head h2{font-size:clamp(22px,4.5vw,30px)}
+.sec-head .kicker{
+  font-family:var(--f-ui);font-size:11px;font-weight:700;letter-spacing:3px;
+  color:var(--hot);text-transform:uppercase;
+  transform:skewX(6deg);
+}
+.sec-head .count{
+  transform:skewX(6deg);
+  font-size:12px;color:var(--dim);letter-spacing:1px;
+}
+
+/* ============ CONTROLS ============ */
+.controls{
+  display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  margin:14px 0 18px;
+}
+.chip{
+  font-family:var(--f-ui);font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+  background:var(--panel);color:var(--dim);
+  border:1px solid var(--line);
+  padding:7px 14px;cursor:pointer;
+  clip-path:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%);
+  transition:color .15s,background .15s;
+  user-select:none;
+}
+.chip:hover{color:var(--ink);background:var(--panel2)}
+.chip.on{background:var(--hot);color:#fff;border-color:var(--hot)}
+.chip.on:hover{background:var(--hot-dk)}
+.chip.ghost.on{background:var(--ice);border-color:var(--ice);color:#070b12}
+.toggle{
+  display:flex;border:1px solid var(--line);margin-left:auto;
+  clip-path:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%);
+}
+.toggle button{
+  font-family:var(--f-ui);font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  background:transparent;color:var(--dim);border:none;padding:7px 14px;cursor:pointer;
+}
+.toggle button.on{background:var(--ice);color:#070b12}
+
+/* ============ GAME RAIL ============ */
+.rail{
+  position:relative;
+  background:var(--bg2);
+  border:1px solid var(--line);
+  padding:18px 14px 8px;
+  clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,0 100%);
+}
+#emberCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.rail > *{position:relative;z-index:1}
+.rail-head{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;
+}
+.live-badge{
+  font-family:var(--f-disp);font-weight:800;font-size:13px;letter-spacing:2.5px;
+  color:#fff;background:var(--hot);padding:2px 10px;
+  clip-path:polygon(5px 0,100% 0,calc(100% - 5px) 100%,0 100%);
+  animation:livepulse 1.6s infinite;
+}
+@keyframes livepulse{0%,100%{opacity:1}50%{opacity:.55}}
+.rail-head .lbl{
+  font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);font-weight:600;
+}
+.games{display:flex;flex-direction:column;gap:8px}
+.game{
+  display:grid;
+  grid-template-columns:64px 1fr 1fr;
+  gap:10px;align-items:center;
+  background:var(--panel);
+  padding:10px 12px;
+  border-left:0;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);
+  transition:background .15s,transform .15s;
+  cursor:pointer;
+  position:relative;
+}
+.game:hover{background:var(--panel2);transform:translateX(3px)}
+.game .when{
+  font-family:var(--f-disp);font-weight:700;font-size:15px;color:var(--dim);
+  letter-spacing:.5px;text-align:center;line-height:1.1;
+}
+.game .when small{display:block;font-size:9px;font-family:var(--f-ui);letter-spacing:1.5px;color:var(--faint);text-transform:uppercase}
+.game .when.live{color:var(--hot)}
+.game .when.final{color:var(--faint)}
+.matchup{display:flex;flex-direction:column;gap:3px;min-width:0}
+.team{
+  display:flex;align-items:center;gap:8px;min-width:0;
+}
+.team .name{
+  font-family:var(--f-disp);font-weight:700;font-size:17px;letter-spacing:.4px;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.team .score{
+  font-family:var(--f-disp);font-weight:900;font-size:19px;
+  margin-left:auto;min-width:26px;text-align:right;
+  color:var(--ink);
+}
+.team .score.hid{color:var(--faint)}
+.team.winner .name{color:var(--gold)}
+.team .score.lead{color:var(--hot)}
+.puck{
+  width:8px;height:8px;background:var(--faint);transform:rotate(45deg);flex-shrink:0;
+}
+.team.winner .puck{background:var(--gold)}
+.game.live{background:#1c0d13;border:1px solid rgba(206,17,38,.35)}
+.game.live .team .score{color:var(--hot);font-size:21px}
+.ot-flash{
+  position:absolute;top:0;right:0;
+  font-family:var(--f-disp);font-weight:800;font-size:10px;letter-spacing:2px;
+  color:#070b12;background:var(--gold);padding:1px 8px;
+  animation:otflash 1s steps(2) infinite;
+}
+@keyframes otflash{50%{opacity:.25}}
+.game-status{
+  position:absolute;bottom:6px;right:16px;
+  font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--faint);font-weight:600;
+}
+
+/* ============ LEADERS ============ */
+.leaders{
+  background:var(--bg2);
+  border:1px solid var(--line);
+  clip-path:polygon(22px 0,100% 0,100% 100%,0 100%,0 22px);
+  padding:16px 14px;
+  margin-top:22px;
+}
+.leaders-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.leaders-head .lbl{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);font-weight:600}
+.leader-row{
+  display:grid;
+  grid-template-columns:34px 1fr auto;
+  gap:10px;align-items:center;
+  padding:9px 10px;
+  background:var(--panel);
+  margin-bottom:6px;
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,0 100%);
+  transition:transform .15s,background .15s;
+}
+.leader-row:hover{transform:translateX(3px);background:var(--panel2)}
+.leader-row .rank{
+  font-family:var(--f-disp);font-weight:900;font-size:20px;color:var(--faint);text-align:center;
+}
+.leader-row:nth-child(2) .rank{color:var(--gold)}
+.leader-row .who{min-width:0}
+.leader-row .pname{
+  font-family:var(--f-disp);font-weight:700;font-size:17px;letter-spacing:.4px;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.leader-row .pteam{font-size:11px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.leader-row .pts{
+  font-family:var(--f-disp);font-weight:900;font-size:22px;color:var(--ice);text-align:right;
+}
+.leader-row .pts small{font-size:10px;font-family:var(--f-ui);letter-spacing:1.5px;color:var(--faint);display:block;text-transform:uppercase}
+.leader-row.fire{
+  background:linear-gradient(90deg,rgba(206,17,38,.18),rgba(206,17,38,.04));
+  border:1px solid rgba(206,17,38,.45);
+  position:relative;
+}
+.leader-row.fire .pname{
+  color:#fff;
+  text-shadow:0 0 14px rgba(206,17,38,.9),0 0 30px rgba(206,17,38,.5);
+  animation:fireglow 2s ease-in-out infinite;
+}
+@keyframes fireglow{
+  0%,100%{text-shadow:0 0 14px rgba(206,17,38,.9),0 0 30px rgba(206,17,38,.5)}
+  50%{text-shadow:0 0 22px rgba(206,17,38,1),0 0 48px rgba(206,17,38,.75)}
+}
+.leader-row.fire .pts{color:var(--hot)}
+.flame-tag{
+  font-family:var(--f-disp);font-weight:800;font-size:10px;letter-spacing:2px;
+  color:#fff;background:var(--hot);
+  padding:1px 8px;margin-left:8px;
+  clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%);
+  vertical-align:middle;
+  animation:livepulse 1.4s infinite;
+}
+
+/* ============ EXPLORE ============ */
+.explore{
+  margin-top:26px;
+  display:grid;grid-template-columns:1fr;gap:14px;
+}
+@media(min-width:760px){
+  .explore{grid-template-columns:1.4fr 1fr}
+}
+.ex-panel{
+  background:var(--panel);
+  clip-path:polygon(0 0,calc(100% - 18px) 0,100% 18px,100% 100%,0 100%);
+  padding:16px 14px;
+  border:1px solid var(--line);
+}
+.ex-panel h3{
+  font-family:var(--f-disp);font-weight:800;font-size:19px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--ice);margin-bottom:10px;
+}
+.ex-panel p{color:var(--dim);font-size:13px;margin-bottom:10px}
+.suggest{
+  display:flex;flex-wrap:wrap;gap:8px;
+}
+.suggest .chip{font-size:11px;padding:6px 12px}
+.suggest .chip:hover{border-color:var(--ice)}
+.statline{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}
+.statline .stat{min-width:80px}
+.statline .num{font-family:var(--f-disp);font-weight:900;font-size:28px;color:var(--gold);line-height:1}
+.statline .lab{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--faint);margin-top:2px}
+
+/* search */
+.searchbox{display:flex;gap:8px;margin-bottom:12px}
+.searchbox input{
+  flex:1;min-width:0;
+  background:var(--bg2);border:1px solid var(--line);
+  color:var(--ink);font-family:var(--f-ui);font-size:14px;
+  padding:9px 12px;
+  clip-path:polygon(6px 0,100% 0,calc(100% - 6px) 100%,0 100%);
+  outline:none;
+}
+.searchbox input:focus{border-color:var(--ice)}
+.searchbox input::placeholder{color:var(--faint)}
+#searchRes{font-size:13px;color:var(--dim);min-height:20px}
+#searchRes b{color:var(--gold)}
+
+/* footer strip */
+.foot{
+  margin-top:30px;padding-top:14px;border-top:1px solid var(--line);
+  display:flex;gap:14px;flex-wrap:wrap;align-items:center;
+  font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);
+}
+.foot .sd{font-family:var(--f-disp);font-weight:800;font-size:14px;color:var(--ink);letter-spacing:1px}
+.foot .sd em{color:var(--hot);font-style:normal}
+
+/* ============ MOBILE ============ */
+@media(max-width:520px){
+  .topbar-inner{padding:8px 12px;gap:10px}
+  .brand-mark{font-size:21px}
+  .brand-sub{display:none}
+  .clock{font-size:13px;margin-left:auto}
+  .game{grid-template-columns:52px 1fr;gap:8px;padding:9px 10px}
+  .game .when{font-size:13px}
+  .team .name{font-size:15px}
+  .team .score{font-size:17px}
+  .game.live .team .score{font-size:19px}
+  .leader-row .pname{font-size:15px}
+  .leader-row .pts{font-size:19px}
+  .leader-row .rank{font-size:17px}
+  .sec-head h1{font-size:28px}
+  .controls .chip{padding:6px 11px;font-size:11px}
+  .toggle{margin-left:0}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">CAHL</span>
+      <span class="brand-sub">Chiller Adult Hockey League · Columbus OH</span>
+    </div>
+    <div class="clock"><span class="dot"></span><span id="clockTxt">--:--</span></div>
+  </div>
+  <nav class="tabs">
+    <a href="#" class="on">Today</a>
+    <a href="#">League</a>
+    <a href="#">Team</a>
+    <a href="#">Players</a>
+    <a href="#">Analytics</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <!-- TODAY -->
+  <div class="sec-head">
+    <h1>Game Night</h1>
+    <span class="kicker">// Tue Sep 2</span>
+    <span class="count" id="gameCount"></span>
+  </div>
+
+  <div class="controls">
+    <button class="chip on" data-league="all">All Leagues</button>
+    <button class="chip" data-league="Red">Red East</button>
+    <button class="chip" data-league="White">White Central</button>
+    <button class="chip" data-league="Blue">Blue West</button>
+    <button class="chip" data-league="Silver">Silver 35+</button>
+    <div class="toggle" id="stateToggle">
+      <button class="on" data-state="live">Live</button>
+      <button data-state="final">Final</button>
+    </div>
+  </div>
+
+  <section class="rail" id="scoreRail">
+    <canvas id="emberCanvas"></canvas>
+    <div class="rail-head">
+      <span class="live-badge" id="liveBadge">● LIVE</span>
+      <span class="lbl" id="railLbl">Tonight on the rinks</span>
+    </div>
+    <div class="games" id="games"></div>
+  </section>
+
+  <!-- LEADERS -->
+  <div class="sec-head">
+    <h2>Points Leaders</h2>
+    <span class="kicker">// Tonight's board</span>
+  </div>
+  <section class="leaders" id="leaders"></section>
+
+  <!-- EXPLORE -->
+  <div class="sec-head">
+    <h2>Explore</h2>
+    <span class="kicker">// Dig around</span>
+  </div>
+  <div class="explore">
+    <div class="ex-panel">
+      <h3>Find a Player</h3>
+      <div class="searchbox">
+        <input type="text" id="searchInput" placeholder="Search 5,930 players…" autocomplete="off">
+      </div>
+      <div id="searchRes">Type a name — e.g. <b>Vonderahe</b></div>
+      <div class="statline">
+        <div class="stat"><div class="num">5,930</div><div class="lab">Players</div></div>
+        <div class="stat"><div class="num">15</div><div class="lab">Games Tonight</div></div>
+        <div class="stat"><div class="num">30</div><div class="lab">Teams</div></div>
+      </div>
+    </div>
+    <div class="ex-panel">
+      <h3>Jump To</h3>
+      <p>League standings, schedules &amp; team pages.</p>
+      <div class="suggest" id="suggest">
+        <button class="chip" data-team="Swamp Donkeys">Swamp Donkeys</button>
+        <button class="chip" data-team="Black and Tan">Black and Tan</button>
+        <button class="chip" data-team="Goalie Guacamole">Goalie Guacamole</button>
+        <button class="chip" data-team="The Wobbly Pirates">Wobbly Pirates</button>
+        <button class="chip" data-team="CockTails and Dreams">CockTails and Dreams</button>
+      </div>
+      <div class="statline">
+        <div class="stat"><div class="num" id="exploreCount">5</div><div class="lab">Shortcuts</div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span class="sd">SWAMP <em>DONKEYS</em> — owner's squad</span>
+    <span>·</span>
+    <span>Concept 07 · Playoff Intensity</span>
+    <span>·</span>
+    <span>cahl.neural-forge.io</span>
+  </footer>
+
+</main>
+
+<script>
+/* ================= DATA ================= */
+const GAMES=[
+ {t:"8:40 PM",a:"Cyclones",b:"Goalie Guacamole",lg:"Red",st:"final",sa:4,sb:2},
+ {t:"9:40 PM",a:"Parking Lot Beers",b:"Triple D",lg:"White",st:"up"},
+ {t:"9:50 PM",a:"Dayton Hawks",b:"Dayton Fire",lg:"Blue",st:"up"},
+ {t:"9:50 PM",a:"C Black Pizza (Saucy)",b:"Carlucci's Pizza Red",lg:"Silver",st:"up"},
+ {t:"10:00 PM",a:"Busch League",b:"Brew Jackets",lg:"Red",st:"up"},
+ {t:"10:00 PM",a:"The Beer Barrel Boys",b:"Gang Green",lg:"White",st:"up"},
+ {t:"10:00 PM",a:"Goose Eggs",b:"The Scorners",lg:"Blue",st:"up"},
+ {t:"10:00 PM",a:"Whiskey Warriors",b:"Vandelay Industries",lg:"Silver",st:"up"},
+ {t:"10:05 PM",a:"Cyclops",b:"Goodfellas",lg:"Red",st:"live",sa:2,sb:1,per:"P2 8:14"},
+ {t:"10:30 PM",a:"Shakers Raw Dogs",b:"The Chicken Selects",lg:"White",st:"up"},
+ {t:"10:30 PM",a:"Bu-Hockkey BT5",b:"T5P Hockey",lg:"Blue",st:"up"},
+ {t:"10:50 PM",a:"Winking Lizard",b:"Birdie Juicers",lg:"Silver",st:"up"},
+ {t:"11:00 PM",a:"Puck Buddies",b:"The tip in",lg:"Red",st:"up"},
+ {t:"11:10 PM",a:"Brewins",b:"The Wobbly Pirates",lg:"White",st:"up"},
+ {t:"11:10 PM",a:"CockTails and Dreams",b:"Goal Train",lg:"Blue",st:"up"},
+];
+const LEADERS=[
+ {n:"William Vonderahe",team:"Black and Tan",pts:5},
+ {n:"Brandon Spickler",team:"Hamilton Mustangs Thu",pts:4},
+ {n:"Will Wuotila",team:"Fluffers",pts:4},
+ {n:"John Kemp",team:"Black and Tan",pts:3},
+ {n:"Matthew Brancaleone",team:"Hamilton Mustangs Thu",pts:2},
+];
+const ALL_PLAYERS=[
+ {n:"William Vonderahe",team:"Black and Tan",pts:5},
+ {n:"Brandon Spickler",team:"Hamilton Mustangs Thu",pts:4},
+ {n:"Will Wuotila",team:"Fluffers",pts:4},
+ {n:"John Kemp",team:"Black and Tan",pts:3},
+ {n:"Matthew Brancaleone",team:"Hamilton Mustangs Thu",pts:2},
+ {n:"Tony Rodrigues",team:"Swamp Donkeys",pts:1},
+ {n:"Mike Kowalski",team:"Goalie Guacamole",pts:2},
+ {n:"Dave Reichert",team:"Busch League",pts:1},
+ {n:"Chris Paulus",team:"Brewins",pts:0},
+];
+
+let curLeague='all', curState='live';
+
+/* ================= RENDER ================= */
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderGames(){
+  const box=document.getElementById('games');
+  let list=GAMES.filter(g=>{
+    if(curLeague!=='all'&&g.lg!==curLeague)return false;
+    if(curState==='live'&&!(g.st==='live'||g.st==='up'))return false;
+    if(curState==='final'&&g.st!=='final')return false;
+    return true;
+  });
+  document.getElementById('gameCount').textContent=list.length+' games';
+  const anyLive=list.some(g=>g.st==='live');
+  document.getElementById('liveBadge').style.display=anyLive?'':'none';
+  document.getElementById('railLbl').textContent=anyLive?'Tonight on the rinks':'No games in this view';
+  if(!list.length){
+    box.innerHTML='<div style="padding:18px;color:var(--faint);font-size:13px;letter-spacing:1px">NOTHING ON THE BOARD — TRY ANOTHER FILTER.</div>';
+    return;
+  }
+  box.innerHTML=list.map(g=>{
+    const live=g.st==='live', fin=g.st==='final';
+    const wcls=fin?(g.sa>g.sb?'a':'b'):'';
+    const scoreA=(live||fin)?g.sa:'—';
+    const scoreB=(live||fin)?g.sb:'—';
+    const leadA=(live||fin)&&g.sa>g.sb, leadB=(live||fin)&&g.sb>g.sa;
+    const whenCls=live?'live':fin?'final':'';
+    const whenSub=live?g.per:fin?'FINAL':g.t.split(' ')[0];
+    return `<article class="game${live?' live':''}" data-teams="${esc(g.a)}|${esc(g.b)}">
+      ${fin?'':live?'<span class="ot-flash">LIVE</span>':''}
+      <div class="when ${whenCls}">${esc(g.t)}<small>${esc(g.lg)}</small></div>
+      <div class="matchup">
+        <div class="team ${wcls==='a'?'winner':''}">
+          <span class="puck"></span>
+          <span class="name">${esc(g.a)}</span>
+          <span class="score${leadA?' lead':''}">${scoreA}</span>
+        </div>
+        <div class="team ${wcls==='b'?'winner':''}">
+          <span class="puck"></span>
+          <span class="name">${esc(g.b)}</span>
+          <span class="score${leadB?' lead':''}">${scoreB}</span>
+        </div>
+      </div>
+      ${live?`<span class="game-status">${esc(g.per)}</span>`:''}
+    </article>`;
+  }).join('');
+}
+
+function renderLeaders(){
+  const box=document.getElementById('leaders');
+  box.innerHTML=LEADERS.map((p,i)=>`
+    <div class="leader-row${i===0?' fire':''}">
+      <div class="rank">${String(i+1).padStart(2,'0')}</div>
+      <div class="who">
+        <div class="pname">${esc(p.n)}${i===0?'<span class="flame-tag">🔥 HEATER</span>':''}</div>
+        <div class="pteam">${esc(p.team)}</div>
+      </div>
+      <div class="pts">${p.pts}<small>PTS</small></div>
+    </div>`).join('');
+}
+
+/* ================= INTERACTIONS ================= */
+document.querySelectorAll('[data-league]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-league]').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    curLeague=btn.dataset.league;
+    renderGames();
+  });
+});
+document.querySelectorAll('#stateToggle button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('#stateToggle button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    curState=btn.dataset.state;
+    renderGames();
+  });
+});
+document.getElementById('games').addEventListener('click',e=>{
+  const card=e.target.closest('.game');
+  if(!card)return;
+  const [a,b]=card.dataset.teams.split('|');
+  const res=document.getElementById('searchRes');
+  res.innerHTML=`Loading head-to-head: <b>${esc(a)}</b> vs <b>${esc(b)}</b> …`;
+  document.getElementById('searchInput').value=a;
+});
+document.getElementById('searchInput').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  const res=document.getElementById('searchRes');
+  if(!q){res.innerHTML='Type a name — e.g. <b>Vonderahe</b>';return;}
+  const hits=ALL_PLAYERS.filter(p=>p.n.toLowerCase().includes(q)||p.team.toLowerCase().includes(q));
+  res.innerHTML=hits.length
+    ? hits.slice(0,4).map(p=>`<div style="margin:4px 0"><b>${esc(p.n)}</b> <span style="color:var(--faint)">· ${esc(p.team)} · ${p.pts} pts</span></div>`).join('')
+      + (hits.length>4?`<div style="color:var(--faint);font-size:11px">+ ${hits.length-4} more…</div>`:'')
+    : `<span style="color:var(--hot)">No match in tonight's board.</span>`;
+});
+document.getElementById('suggest').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-team]');
+  if(!btn)return;
+  document.getElementById('searchInput').value=btn.dataset.team;
+  document.getElementById('searchInput').dispatchEvent(new Event('input'));
+  document.getElementById('searchInput').scrollIntoView({block:'center'});
+});
+
+/* clock */
+function tick(){
+  const d=new Date();
+  document.getElementById('clockTxt').textContent=d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+}
+tick();setInterval(tick,15000);
+
+/* ================= EMBER PARTICLES ================= */
+(function(){
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const cv=document.getElementById('emberCanvas'),ctx=cv.getContext('2d');
+  let W,H,parts=[],last=0;
+  function size(){
+    W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;
+  }
+  size();window.addEventListener('resize',()=>{size();parts=[];});
+  const COLS=['#CE1126','#6e7684','#A2AAAD','#e8edf4'];
+  function spawn(){
+    parts.push({
+      x:Math.random()*W,
+      y:H+4,
+      vx:(Math.random()-.5)*.35,
+      vy:-(.35+Math.random()*.75),
+      r:.8+Math.random()*1.8,
+      life:1,
+      decay:.004+Math.random()*.008,
+      c:COLS[Math.random()*COLS.length|0]
+    });
+  }
+  function loop(ts){
+    requestAnimationFrame(loop);
+    if(ts-last<50)return;
+    last=ts;
+    ctx.clearRect(0,0,W,H);
+    if(parts.length<26&&Math.random()<.5)spawn();
+    ctx.globalCompositeOperation='lighter';
+    for(let i=parts.length-1;i>=0;i--){
+      const p=parts[i];
+      p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;
+      if(p.life<=0||p.y<-6){parts.splice(i,1);continue;}
+      ctx.globalAlpha=Math.max(p.life,0)*.75;
+      ctx.fillStyle=p.c;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.283);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    ctx.globalCompositeOperation='source-over';
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

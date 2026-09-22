@@ -1,0 +1,89 @@
+=== openPlayer def ===
+=== catch/hardFail paint after team fetch ===
+  L1991: let hardFail = null;
+  L2220: hardFail = (err && err.name === 'AbortError') ? 'Team request timed out'
+  L2224: if (hardFail) {
+  L2226: if (c) c.innerHTML = teamErrorHtml(teamId, hardFail);
+2222:       } finally {
+2223:         disarm();
+2224:         if (hardFail) {
+2225:           const c = document.getElementById('teamContent');
+2226:           if (c) c.innerHTML = teamErrorHtml(teamId, hardFail);
+2227:         }
+2228:       }
+2229:     }
+2230: 
+2231:     function teamErrorHtml(teamId, msg) {
+2232:       return `<div class="card"><div class="empty">Couldn\u2019t load your team \u2014 ${esc(msg)}.</div>`
+2233:         + `<button class="small" style="margin-top:10px" onclick="loadTeamContent('${teamId}', true)">Retry</button></div>`;
+2234:     }
+2235: 
+2236:     function awardsHtml(awards) {
+2237:       if (!awards || !awards.length) {
+2238:         return '<div class="picker-hint award-empty">No session championship or 1st-place award published for this team.</div>';
+2239:       }
+=== res.ok / res.status handling census ===
+  L897: if (res.ok || attempt === 1) break;
+  L904: if (res.ok) state.cache[cacheKey] = data;
+=== pal-fade / pal-pop / rise-in / shimmer / fade-in consumers ===
+  pal-fade: 1 uses
+    L769: .pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }
+  pal-pop: 1 uses
+    L778: animation: pal-pop 0.15s var(--ease);
+  rise-in: 1 uses
+    L1310: .card, .sb-card { animation: rise-in 0.24s var(--ease) both; }
+  shimmer: 1 uses
+    L945: animation: shimmer 1.4s infinite;
+  fade-in: 5 uses
+    L1212: .fade-in { animation: none !important; }
+    L1229: /* fade-in for tab content */
+    L1230: .fade-in { animation: fade-in 0.26s var(--ease) both; }
+    L1319: .fade-in { animation-duration: 0.12s; }
+  score-flash: 2 uses
+    L410: /* score-flash: JS adds .flash when a digit changes */
+    L411: .sb-num.flash { animation: score-flash 0.9s var(--ease); }
+  live-breathe: 1 uses
+    L362: animation: live-breathe 2.2s ease-in-out infinite;
+  live-dot-pulse: 5 uses
+    L260: animation: live-dot-pulse 1.4s ease-in-out infinite;
+    L379: animation: live-dot-pulse 1.4s ease-in-out infinite;
+    L468: animation: live-dot-pulse 1.6s ease-in-out infinite;
+    L834: animation: live-dot-pulse 1.4s ease-in-out infinite;
+=== rm-block class coverage check ===
+  animation declarations: 22
+    L260 live-dot-pulse: animation: live-dot-pulse 1.4s ease-in-out infinite;
+    L362 live-breathe: animation: live-breathe 2.2s ease-in-out infinite;
+    L379 live-dot-pulse: animation: live-dot-pulse 1.4s ease-in-out infinite;
+    L411 score-flash: .sb-num.flash { animation: score-flash 0.9s var(--ease); }
+    L468 live-dot-pulse: animation: live-dot-pulse 1.6s ease-in-out infinite;
+    L769 pal-fade: .pal-ov.open { display: flex; animation: pal-fade 0.12s var(--ease); }
+    L778 pal-pop: animation: pal-pop 0.15s var(--ease);
+    L834 live-dot-pulse: animation: live-dot-pulse 1.4s ease-in-out infinite;
+    L870 live-dot-pulse: animation: live-dot-pulse 1.6s ease-in-out infinite;
+    L945 shimmer: animation: shimmer 1.4s infinite;
+    L953 spin: animation: spin 0.8s linear infinite;
+    L1212 none: .fade-in { animation: none !important; }
+    L1218 none: .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animat
+    L1219 none: .skeleton::after, .skeleton-card::after { animation: none !important; }
+    L1220 none: .sb-num.flash { animation: none !important; }
+    L1230 fade-in: .fade-in { animation: fade-in 0.26s var(--ease) both; }
+    L1280 hero-next-pulse: animation: hero-next-pulse 1.8s var(--ease) infinite;
+    L1297 none: .hero-glow::before { animation: none !important; }
+    L1298 none: .hero-next-dot { animation: none !important; }
+    L1310 rise-in: .card, .sb-card { animation: rise-in 0.24s var(--ease) both; }
+    L1403 none: .card, .sb-card, .sb-list > *, .fade-in { animation: none !important; }
+    L1411 none: .card, .sb-card, .sb-list > * { animation: none !important; }
+=== repo supabase check (local source) ===
+  /Users/traviscurnutte/cahl-dashboard/app.py: 11 refs
+    L243: # Cold instance: hydrate from Supabase first, then the on-disk crawl
+    L328: # ---- Supabase persistent store (cross-instance, survives cold boots) ----
+    L330: # unless SUPABASE_URL + SUPABASE_SERVICE_KEY are set in the environment.
+    L336: url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    L337: key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    L342: """Fetch a cached payload from Supabase. Returns (data, ok)."""
+    L361: """Upsert a payload into Supabase. Fire-and-forget semantics."""
+    L472: # Cold instance: hydrate from Supabase (cross-instance, always fresh) or
+    L482: "from_supabase": True})
+=== dead-team + league retry ===
+  /api/team/E25EA9F0-0F26-BD6A-F23ECD21D7F432C8  3.86s status=HTTP Error 502: Bad Gateway body=None
+  /api/league/Sunday%20C%20West  2.10s status=HTTP Error 502: Bad Gateway body=None

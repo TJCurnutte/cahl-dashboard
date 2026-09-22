@@ -1,0 +1,543 @@
+/* ============================================================
+   LANDING PAGE — ICE EDITION (light+dark)
+   Light mode: ice-white, cool grays, crisp navy type, ONE crimson
+   accent. No pink washes, no glow blobs, no colliding geometry.
+   Dark mode keeps the rink-night feel with the same layout system.
+   ============================================================ */
+
+#landingGate {
+  /* token sets: dark defaults here, light overrides below */
+  --lp-bg: #0b1424;
+  --lp-ticker-bg: rgba(200, 16, 46, 0.14);
+  --lp-ticker-bg-solid: #1b1020;
+  --lp-ticker-text: #ffdde3;
+  --lp-nav-bg: rgba(11, 20, 36, 0.62);
+  --lp-nav-text: #b9c6dd;
+  --lp-body: #c3cede;
+  --lp-body-strong: #a7b6cf;
+  --lp-meta: #9db0d0;
+  --lp-stat-num: #ffffff;
+  --lp-headline: #f2f5fa;
+  --lp-sub: #a7b6cf;
+  --lp-glass-fill: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  --lp-glass-border: rgba(255, 255, 255, 0.14);
+  --lp-glass-spec: rgba(255, 255, 255, 0.16);
+  --lp-card-shadow: 0 14px 44px rgba(0, 0, 0, 0.4);
+  --lp-hairline: rgba(255, 255, 255, 0.08);
+  --lp-pill-bg: rgba(42, 127, 212, 0.14);
+  --lp-pill-border: rgba(42, 127, 212, 0.4);
+  --lp-pill-text: #cfdcf2;
+  --lp-ms-bg: rgba(10, 18, 34, 0.55);
+  --lp-accent: #d92743;
+  --lp-accent-deep: #a3162e;
+  --lp-cta-radius: 10px;
+
+  position: fixed; inset: 0; z-index: 200;
+  overflow-y: auto;
+  background: var(--lp-bg);
+  opacity: 1;
+  transition: opacity 0.45s var(--ease, ease), visibility 0.45s;
+  -webkit-overflow-scrolling: touch;
+}
+#landingGate.gate-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+/* ONE subtle cool wash in light — no pink, no blobs */
+
+/* ---- rink geometry: a real rink diagram, single hue, clear of glyphs ---- */
+/* (removed 09-22: dead rink-diagram overlay rules that collided with the
+   .lp-rink name chips — position:absolute/inset:0 stretched every chip to fill the
+   By Rink card. The overlay element no longer exists in the template.) */
+
+/* ---- live ticker ---- */
+.lp-ticker {
+  position: relative; z-index: 2;
+  overflow: hidden; white-space: nowrap;
+  background: var(--lp-ticker-bg);
+  padding: 10px 0;
+}
+/* edge fades (overlay gradients — renderer-proof) */
+.lp-ticker::before, .lp-ticker::after {
+  content: "";
+  position: absolute; top: 0; bottom: 0; width: 80px;
+  z-index: 2; pointer-events: none;
+}
+.lp-ticker::before { left: 0;  background: linear-gradient(90deg, var(--lp-ticker-bg-solid, #16264a), transparent); }
+.lp-ticker::after  { right: 0; background: linear-gradient(-90deg, var(--lp-ticker-bg-solid, #16264a), transparent); }
+.lp-ticker-track {
+  display: inline-block;
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lp-ticker-text);
+  animation: lp-ticker-scroll 45s linear infinite;
+  will-change: transform;
+}
+.lp-ticker:hover .lp-ticker-track { animation-play-state: paused; }
+@keyframes lp-ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ---- top nav ---- */
+.lp-nav {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 18px;
+  max-width: 1060px; margin: 0 auto;
+  padding: 12px 32px;
+  background: var(--lp-nav-bg);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--lp-hairline);
+}
+.lp-brand { height: 34px; width: auto; display: block; }
+.lp-links { display: flex; gap: 4px; margin-left: auto; }
+.lp-links a {
+  font-family: Inter, var(--font, sans-serif); font-size: 13.5px; font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none;
+  color: var(--lp-nav-text); text-decoration: none;
+  padding: 10px 12px; border-radius: 8px;
+  transition: color var(--t-fast, 0.15s), background var(--t-fast, 0.15s);
+}
+.lp-links a:hover { color: var(--lp-accent); background: rgba(200, 16, 46, 0.07); }
+.lp-links a:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
+.lp-cta-sm { min-height: 40px; padding: 0 16px; font-size: 14px; border-radius: 8px; }
+
+/* ---- hero: left-aligned editorial, no centered stack ---- */
+.lp-hero {
+  position: relative;
+  max-width: 1060px; margin: 0 auto;
+  padding: 88px 32px 72px;
+}
+.lp-hero-lines { display: none; } /* rink SVG replaces the old line art */
+.lp-hero-logo { display: none; } /* brand lives in the nav — hero shows the product instead */
+html[data-theme="dark"] .lp-hero-logo { filter: drop-shadow(0 14px 40px rgba(0, 0, 0, 0.5)); }
+.lp-title {
+  margin: 0 0 20px;
+  font-family: var(--display);
+  font-size: clamp(42px, 6.4vw, 76px);
+  font-weight: 800; line-height: 0.96;
+  letter-spacing: 0.005em;
+  text-transform: uppercase; font-style: italic;
+  color: var(--lp-headline);
+  text-wrap: balance;
+}
+html[data-theme="dark"] .lp-title { text-shadow: 0 4px 40px rgba(0, 0, 0, 0.5); }
+.lp-title-red { color: var(--lp-accent); }
+/* glow removed — flat heavy type reads premium */
+.lp-sub {
+  margin: 0 0 32px; max-width: 58ch;
+  color: var(--lp-sub); font-size: 17px; line-height: 1.7;
+  text-wrap: pretty;
+}
+.lp-hint {
+  margin: 16px 0 0;
+  font-family: var(--mono); font-size: 12px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--lp-body-strong);
+}
+
+/* ---- CTA: flat crimson, single accent, no glow ---- */
+.gate-cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 52px; padding: 0 32px;
+  font-family: Inter, var(--font, sans-serif);
+  font-size: 16px; font-weight: 600; letter-spacing: 0.01em;
+  color: #ffffff;
+  background: var(--lp-accent);
+  border: none;
+  border-radius: var(--lp-cta-radius);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: transform var(--t-fast, 0.15s) var(--ease, ease), background var(--t-fast, 0.15s), box-shadow var(--t-fast, 0.15s);
+}
+.gate-cta:hover {
+  transform: translateY(-1px);
+  background: var(--lp-accent-deep);
+  box-shadow: 0 6px 18px rgba(200, 16, 46, 0.28);
+}
+.gate-cta:active { transform: translateY(0); }
+.gate-cta:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 3px; }
+.gate-cta .cta-arrow { transition: transform var(--t-fast, 0.15s) var(--ease, ease); }
+.gate-cta:hover .cta-arrow { transform: translateX(3px); }
+.gate-cta-ghost {
+  background: transparent; color: var(--lp-headline);
+  border: 1px solid var(--lp-glass-border);
+  box-shadow: none;
+}
+.gate-cta-ghost:hover { background: rgba(200, 16, 46, 0.06); box-shadow: none; }
+html[data-theme="dark"] .gate-cta-ghost { border-color: rgba(255, 255, 255, 0.18); }
+
+/* ---- stat band: scoreboard component, no slicing line ---- */
+.lp-statband {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  max-width: 1060px; margin: 24px auto 0;
+  background: var(--lp-glass-fill);
+  border: 1px solid var(--lp-glass-border);
+  border-radius: 12px;
+  box-shadow: var(--lp-card-shadow);
+}
+.lp-stat {
+  position: relative;
+  padding: 26px 18px 22px;
+  text-align: center;
+}
+.lp-stat:first-child { border-left: none; }
+
+.lp-stat-num {
+  display: block;
+  font-family: var(--display); font-size: 34px;
+  font-weight: 800; line-height: 1;
+  color: var(--lp-stat-num);
+  font-variant-numeric: tabular-nums;
+}
+.lp-stat-label {
+  display: block; margin-top: 9px;
+  font-family: var(--mono); font-size: 11px;
+  font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--lp-meta);
+}
+
+/* ---- sections ---- */
+.lp-section { position: relative; max-width: 1060px; margin: 0 auto; padding: 60px 32px; }
+.lp-h2 {
+  margin: 0 0 30px;
+  font-family: var(--display); font-size: 30px; font-weight: 800;
+  font-style: italic; text-transform: uppercase;
+  letter-spacing: 0.01em; color: var(--lp-headline);
+}
+.lp-h2::after {
+  content: "";
+  display: block; width: 52px; height: 3px; margin-top: 12px;
+  background: var(--lp-accent);
+  border-radius: 2px;
+}
+
+/* bento grid — flat cards, crisp borders, subtle hover */
+.lp-bento {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.lp-feature {
+  position: relative;
+  background: var(--lp-glass-fill);
+  border: 1px solid var(--lp-glass-border);
+  border-radius: 12px;
+  padding: 24px 22px;
+  box-shadow: var(--lp-card-shadow);
+  transition: transform var(--t-fast, 0.15s) var(--ease, ease), border-color var(--t-fast, 0.15s), box-shadow var(--t-fast, 0.15s);
+}
+.lp-feature:hover {
+  transform: translateY(-3px);
+  border-color: rgba(200, 16, 46, 0.4);
+  box-shadow: var(--lp-card-shadow), 0 0 0 1px rgba(200, 16, 46, 0.25);
+}
+.lp-feature-wide { grid-column: span 2; }
+.lp-f-icon {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--lp-accent);
+  background: rgba(200, 16, 46, 0.08);
+  border: 1px solid rgba(200, 16, 46, 0.25);
+  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; margin-bottom: 14px;
+}
+.lp-feature h3 {
+  margin: 0 0 7px;
+  font-family: var(--display); font-size: 21px; font-weight: 700;
+  letter-spacing: 0.02em; text-transform: uppercase; font-style: italic;
+  color: var(--lp-headline);
+}
+.lp-feature p { margin: 0; color: var(--lp-body); font-size: 14.5px; line-height: 1.7; }
+
+/* mini scoreboard — scoreboard chrome, not glass */
+.lp-miniscore {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 18px; padding: 13px 16px;
+  background: var(--lp-ms-bg);
+  border: 1px solid var(--lp-glass-border);
+  border-radius: 10px;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--lp-body-strong);
+}
+.lp-live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--lp-accent);
+  box-shadow: 0 0 8px rgba(200, 16, 46, 0.6);
+  animation: lp-pulse 1.6s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+@keyframes lp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.lp-live-tag { color: var(--lp-accent); margin-right: 6px; }
+.lp-ms-score { color: var(--lp-headline); font-size: 16px; font-variant-numeric: tabular-nums; }
+.lp-ms-meta { margin-left: auto; color: var(--lp-meta); }
+
+/* rink row */
+.lp-rinkrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.lp-rink {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--lp-pill-text);
+  padding: 8px 14px;
+  background: var(--lp-pill-bg);
+  border: 1px solid var(--lp-pill-border);
+  border-radius: 999px;
+}
+
+/* about */
+.lp-about p { max-width: 68ch; margin: 0 auto 16px; color: var(--lp-body); font-size: 15.5px; line-height: 1.75; }
+.lp-about .lp-note {
+  color: var(--lp-meta); font-size: 12px; font-family: var(--mono);
+  letter-spacing: 0.05em; text-align: center; margin-top: 24px;
+}
+
+/* sponsor */
+.lp-sponsor-card {
+  display: flex; align-items: center; gap: 24px;
+  max-width: 660px; margin: 0 auto;
+  padding: 24px 28px;
+  background: var(--lp-glass-fill);
+  border: 1px solid var(--lp-glass-border);
+  border-radius: 12px;
+  box-shadow: var(--lp-card-shadow);
+  text-decoration: none;
+  transition: border-color var(--t-fast, 0.15s), transform var(--t-fast, 0.15s), box-shadow var(--t-fast, 0.15s);
+}
+.lp-sponsor-card:hover { border-color: rgba(185, 155, 114, 0.6); transform: translateY(-2px); }
+.lp-sponsor-card:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 3px; }
+.lp-sponsor-card img { width: 190px; height: auto; display: block; flex: 0 0 auto; }
+.lp-sponsor-copy { display: block; }
+.lp-sponsor-blurb { display: block; margin: 6px 0 8px; color: var(--lp-body); font-size: 14px; line-height: 1.65; }
+.lp-sponsor-link, .lp-sponsor-copy .sponsor-kicker { display: block; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.05em; color: var(--sponsor-gold, #b8925e); }
+.lp-sponsor-copy .sponsor-kicker { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; }
+.lp-sponsor-card:hover .lp-sponsor-link { text-decoration: underline; }
+
+/* footer */
+.lp-footer { text-align: center; padding: 30px 24px 64px; }
+.lp-fine { margin: 18px 0 0; color: var(--lp-meta); font-size: 12.5px; font-family: var(--mono); letter-spacing: 0.04em; }
+.lp-fine a { color: var(--lp-body-strong); }
+
+/* ---- in-app sponsor strip (Today tab) ---- */
+.sponsor-strip {
+  margin: 18px 0 6px;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 10px 16px;
+  background: var(--inset);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  text-decoration: none;
+  transition: border-color var(--t-fast, 0.15s), background var(--t-fast, 0.15s);
+}
+.sponsor-strip:hover { border-color: var(--border-strong); background: var(--panel-2); }
+.sponsor-strip:focus-visible { outline: 2px solid var(--union); outline-offset: 2px; }
+.sponsor-strip img { height: 20px; width: auto; max-width: 150px; object-fit: contain; display: block; }
+.sponsor-strip .sponsor-strip-text {
+  font-family: var(--display); font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+.sponsor-strip .sponsor-strip-kicker {
+  font-family: var(--mono); font-size: var(--mono-xs); font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+  display: block;
+}
+.sponsor-strip:hover .sponsor-strip-text { color: var(--sponsor-gold, #b8925e); }
+
+
+/* ---- hero grid: copy left, live scoreboard right ---- */
+.lp-hero-grid {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 56px; align-items: stretch;
+}
+.lp-hero-card { display: flex; flex-direction: column; }
+.lp-hc-rows { flex: 1 1 auto; }
+.lp-hero-copy { min-width: 0; }
+.lp-hero-card {
+  align-self: start;
+  margin-top: 0;
+  background: var(--lp-glass-fill);
+  border: 1px solid var(--lp-glass-border);
+  border-radius: 12px;
+  box-shadow: var(--lp-card-shadow);
+  padding: 20px 22px;
+}
+.lp-hc-head {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--lp-accent);
+  padding-bottom: 12px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--lp-hairline);
+}
+.lp-hc-rows { display: grid; gap: 10px; }
+.lp-hc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--lp-body-strong);
+  letter-spacing: 0.02em;
+}
+.lp-hc-vs { color: var(--lp-meta); font-weight: 500; }
+.lp-hc-score, .lp-hc-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: rgba(200, 16, 46, 0.08);
+  color: var(--lp-accent);
+}
+.lp-hc-time { background: rgba(42, 127, 212, 0.08); color: var(--lp-body-strong); }
+.lp-hc-score { color: var(--lp-accent); font-weight: 700; }
+.lp-hc-foot {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--lp-hairline);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+  color: var(--lp-meta);
+}
+/* ticker edge fades + seam fix + hint contrast */
+.lp-ticker {
+
+}
+.lp-stat::before { top: -2px; }
+@media (max-width: 900px) {
+  .lp-hero-grid { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* ---- responsive ---- */
+@media (max-width: 719px) {
+  .lp-links { display: none; }
+  .lp-title { font-size: clamp(40px, 10vw, 54px); }
+  .lp-hero { padding: 52px 20px 48px; }
+  .lp-hero-logo { width: 104px; }
+  .lp-bento { grid-template-columns: 1fr; }
+  .lp-feature-wide { grid-column: auto; }
+  .lp-statband { grid-template-columns: repeat(2, 1fr); }
+  .lp-stat:nth-child(3) { border-left: none; }
+  .lp-stat:nth-child(n+3) { border-top: 1px solid var(--lp-hairline); }
+  .lp-stat::before { display: none; }
+  .lp-sponsor-card { flex-direction: column; text-align: center; }
+  .lp-sponsor-card img { width: 170px; }
+  .lp-miniscore { flex-wrap: wrap; }
+}
+@media (max-width: 430px) {
+  .gate-cta { min-height: 50px; padding: 0 26px; font-size: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #landingGate, .gate-cta, .gate-cta .cta-arrow, .lp-sponsor-card, .lp-links a,
+  .lp-ticker-track, .lp-live-dot, .lp-feature { transition: none; animation: none; }
+  .lp-feature, .lp-sponsor-card, .lp-nav { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+/* LIGHT MODE DISABLED ON LANDING (owner: "disable light mode, it just sucks") —
+   the landing always renders in rink-night dark, regardless of the saved theme.
+   The dashboard itself still respects the theme toggle. */
+html[data-theme="light"] #landingGate {
+  --lp-bg: #0b1424;
+  --lp-ticker-bg: rgba(200, 16, 46, 0.14);
+  --lp-ticker-bg-solid: #1b1020;
+  --lp-ticker-text: #ffdde3;
+  --lp-nav-bg: rgba(11, 20, 36, 0.62);
+  --lp-nav-text: #b9c6dd;
+  --lp-body: #c3cede;
+  --lp-body-strong: #a7b6cf;
+  --lp-meta: #9db0d0;
+  --lp-stat-num: #ffffff;
+  --lp-headline: #f2f5fa;
+  --lp-sub: #a7b6cf;
+  --lp-glass-fill: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  --lp-glass-border: rgba(255, 255, 255, 0.14);
+  --lp-pill-bg: rgba(42, 127, 212, 0.14);
+  --lp-pill-border: rgba(42, 127, 212, 0.4);
+  --lp-pill-text: #cfdcf2;
+  --lp-ms-bg: rgba(10, 18, 34, 0.55);
+  --lp-accent: #d92743;
+  --lp-accent-deep: #a3162e;
+  --lp-hairline: rgba(255, 255, 255, 0.08);
+  background: var(--lp-bg);
+}
+html[data-theme="light"] #landingGate::before { background: none; }
+html[data-theme="light"] #landingGate .lp-title { text-shadow: 0 4px 40px rgba(0, 0, 0, 0.5); }
+html[data-theme="light"] #landingGate .lp-title-red { color: #ef3d54; text-shadow: 0 0 34px rgba(239, 61, 84, 0.35); }
+html[data-theme="light"] #landingGate .lp-stat-num { text-shadow: 0 0 26px rgba(200, 16, 46, 0.4); }
+
+/* ---- depth: ice-gradient wash behind hero (subtle, single hue) ---- */
+.lp-hero::before {
+  content: "";
+  position: absolute; inset: -40px -60px;
+  background:
+    radial-gradient(720px 420px at 18% 20%, rgba(42, 127, 212, 0.10), transparent 65%),
+    radial-gradient(600px 380px at 85% 70%, rgba(200, 16, 46, 0.07), transparent 65%);
+  pointer-events: none;
+}
+html[data-theme="light"] .lp-hero::before {
+  background:
+    radial-gradient(720px 420px at 18% 20%, rgba(42, 127, 212, 0.06), transparent 65%),
+    radial-gradient(600px 380px at 85% 70%, rgba(200, 16, 46, 0.045), transparent 65%);
+}
+.lp-hero-grid, .lp-rink { position: relative; z-index: 1; }
+/* scoreboard card: fuller height + footer pinned to bottom */
+.lp-hc-foot { margin-top: auto; }
+
+/* ---- style.css leak shield: the dashboard header/nav element selectors apply to the
+   landing's <header class="lp-nav"> / <nav class="lp-links"> and paint white/gray
+   patches that don't match the landing background (Travis 09-22). Scoped at
+   #landingGate so the dashboard keeps its own header rules. ---- */
+#landingGate .lp-nav {
+  background: transparent;
+  border-bottom: none;
+}
+#landingGate header.lp-nav,
+html[data-theme="light"] #landingGate header.lp-nav {
+  background: transparent;
+  border-bottom: none;
+}
+#landingGate nav.lp-links,
+#landingGate .lp-links {
+  background: transparent;
+  border-top: none;
+  padding: 0;
+}
+#landingGate .lp-links a {
+  background: transparent;
+  color: var(--lp-nav-text);
+}
+#landingGate .lp-links a:hover {
+  color: var(--lp-accent);
+  background: rgba(200, 16, 46, 0.07);
+}
+
+/* ---- Travis 09-22: nav must match the page background — full-bleed bar, content
+   still contained. The contained translucent panel read as a floating patch with hard
+   seams at both edges. Pattern: the .lp-nav element goes transparent; a ::before
+   stripe spans the full viewport width and carries the bar background + hairline. ---- */
+#landingGate .lp-nav {
+  background: transparent;
+  border-bottom: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  position: relative;
+}
+#landingGate .lp-nav::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%; transform: translateX(-50%);
+  width: 100vw;
+  background: var(--lp-nav-bg);
+  border-bottom: 1px solid var(--lp-hairline);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  z-index: -1;
+}
+/* keep the brand + links + CTA above the stripe */
+#landingGate .lp-nav > * { position: relative; z-index: 1; }
+
+/* ---- Travis 09-22 (visual check): the hero card's empty-state text inherited the
+   dashboard body color (#0d1b2e — dark navy on a dark card = invisible). Anchor the
+   gate's inherited text colors so dashboard body rules can't leak in. ---- */
+#landingGate {
+  color: var(--lp-headline);
+}
+#landingGate .lp-hc-empty {
+  color: var(--lp-body-strong);
+  font-size: 13.5px;
+  line-height: 1.6;
+}

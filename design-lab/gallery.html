@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CAHL Design Lab — Concept Gallery</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e14;--panel:#131926;--line:#243048;--text:#eef2f7;--muted:#8b96a8;--red:#ff3b5c}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Archivo',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:14px;letter-spacing:.14em;font-weight:800}
+header h1 b{color:var(--red)}
+.hint{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-left:auto}
+.picker{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.picker::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+  color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.04em;cursor:pointer;transition:all .15s;white-space:nowrap}
+.chip:hover{color:var(--text);border-color:#3a4a6a}
+.chip.on{background:var(--red);border-color:var(--red);color:#fff}
+.chip .no{font-family:'IBM Plex Mono',monospace;opacity:.7;margin-right:6px}
+.stage{flex:1;position:relative;background:#05070b}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.navbtns{position:fixed;bottom:18px;right:18px;display:flex;gap:8px;z-index:10}
+.navbtns button{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:rgba(16,21,29,.92);
+  color:var(--text);font-size:18px;cursor:pointer;backdrop-filter:blur(6px)}
+.navbtns button:hover{border-color:var(--red)}
+.counter{position:fixed;bottom:30px;left:20px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);z-index:10;
+  background:rgba(10,14,20,.8);padding:6px 10px;border-radius:6px;border:1px solid var(--line)}
+@media(max-width:640px){.hint{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>CAHL<b>/</b>DESIGN LAB</h1>
+  <span class="hint">← → switch concepts · 1-9,0 jump · open concept ↗</span>
+</header>
+<div class="picker" id="picker"></div>
+<div class="stage"><iframe id="frame" title="concept preview"></iframe></div>
+<div class="counter" id="counter"></div>
+<div class="navbtns">
+  <button id="prev" aria-label="previous">←</button>
+  <button id="next" aria-label="next">→</button>
+</div>
+<script>
+const CONCEPTS=[
+ {f:"concepts/01-broadcast-booth.html",n:"Broadcast Booth",d:"telecast lower-thirds, marquee scoreboard, chyron ticker"},
+ {f:"concepts/02-ice-retro.html",n:"Ice-Retro 78",d:"70s hockey poster, cream paper, stamps & halftone"},
+ {f:"concepts/03-terminal.html",n:"Locker-Room Terminal",d:"phosphor wire terminal, hotkeys, boot sequence"},
+ {f:"concepts/04-linear-ice.html",n:"Linear-Ice",d:"precise dark + ⌘K player palette"},
+ {f:"concepts/05-rink-top.html",n:"Rink-Top",d:"the screen is the rink; lanes, trails, puck-dots"},
+ {f:"concepts/06-highlight-reel.html",n:"Highlight-Reel",d:"cinematic scoreboard, snap-scroll reel"},
+ {f:"concepts/07-playoff-intensity.html",n:"Playoff-Intensity",d:"esports diagonal panels, embers, loud type"},
+ {f:"concepts/08-scoreboard-saas.html",n:"Scoreboard-SaaS",d:"anti-flash data craft: sort, filter, search, themes"},
+ {f:"concepts/09-varsity.html",n:"Varsity",d:"letterman felt, pennants, split-flap scores"},
+ {f:"concepts/10-neon-rink.html",n:"Neon-Rink",d:"synthwave horizon grid, arcade cabinets, two neons"},
+];
+let i=0;
+const picker=document.getElementById("picker"),frame=document.getElementById("frame"),counter=document.getElementById("counter");
+function chipEl(c,idx){
+  const b=document.createElement("button");b.className="chip"+(idx===i?" on":"");
+  b.innerHTML=`<span class="no">${String(idx+1).padStart(2,"0")}</span>${c.n}`;
+  b.title=c.d;b.onclick=()=>go(idx);return b;
+}
+function renderPicker(){picker.innerHTML="";CONCEPTS.forEach((c,idx)=>picker.appendChild(chipEl(c,idx)))}
+function go(n){
+  i=(n+CONCEPTS.length)%CONCEPTS.length;
+  frame.src=CONCEPTS[i].f;
+  counter.textContent=`${String(i+1).padStart(2,"0")} / ${CONCEPTS.length} — ${CONCEPTS[i].n}: ${CONCEPTS[i].d}`;
+  renderPicker();
+}
+document.getElementById("prev").onclick=()=>go(i-1);
+document.getElementById("next").onclick=()=>go(i+1);
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
+  if(e.key==="ArrowLeft")go(i-1);
+  else if(e.key==="ArrowRight")go(i+1);
+  else if(/^[0-9]$/.test(e.key)){const n=e.key==="0"?9:+e.key-1;if(n<CONCEPTS.length)go(n)}
+});
+go(0);
+</script>
+</body>
+</html>

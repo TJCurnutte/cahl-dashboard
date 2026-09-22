@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05080e">
+<title>CAHL WIRE v44 — Locker-Room Terminal (Concept 03)</title>
+<!--
+  CONCEPT 03 — "LOCKER-ROOM TERMINAL" · CAHL Dashboard · Monitor + Command surface
+  Sports-wire terminal: Bloomberg-meets-hockey. Near-black, phosphor-amber mono,
+  box-drawing borders, boot sequence, ticker, blinking prompt, working hot-keys.
+  Density is the aesthetic. Zero decoration, all signal. CRT flicker + scanline
+  subtlety, amber glow on live scores.
+
+  MOTION BUDGET: boot sequence (once), ticker marquee (loop), blinking cursor (CSS),
+  CRT flicker (8s, near-imperceptible), live dot blink. Live clock via JS.
+  prefers-reduced-motion: boot prints instantly, marquee/blink/flicker off,
+  everything static-readable.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#05080e; --bg2:#090d15; --panel:#0c1019; --panel2:#10141e;
+  --line:#1e2534; --line-dim:#141926; --line-hot:#333e50;
+  --amber:#A2AAAD; --amber-dim:#6e7684; --glow:rgba(162,170,173,.55);
+  --mint:#9fb4cc; --red:#CE1126; --green:#dfe5ea; --blue:#4d7fc4;
+  --ink:#e8edf4; --dim:#8296ad; --faint:#4a5a70;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{color-scheme:dark}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--mono); font-size:13px; line-height:1.5;
+  -webkit-font-smoothing:antialiased; min-height:100vh; overflow-x:hidden;
+}
+::selection{background:rgba(162,170,173,.28);color:#fff}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#252d3d;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line-hot);font-size:12px}
+input{padding:5px 8px;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 1px var(--glow)}
+.num{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+:focus-visible{outline:1px dashed var(--amber);outline-offset:2px}
+
+/* ---- CRT overlays: scanlines + vignette flicker (subtle, non-interactive) ---- */
+.crt::before{
+  content:"";position:fixed;inset:0;z-index:999;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.028) 0 1px,transparent 1px 3px);
+}
+.crt::after{
+  content:"";position:fixed;inset:0;z-index:999;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(0,0,0,.42) 100%);
+  animation:crtflick 8s steps(60) infinite;
+}
+@keyframes crtflick{0%,94%,100%{opacity:1}95%{opacity:.965}96.5%{opacity:.98}97.5%{opacity:.955}99%{opacity:.985}}
+body.rm .crt::after{animation:none}
+body.rm .crt::before{opacity:.5}
+
+/* ---- boot splash ---- */
+#boot{position:fixed;inset:0;z-index:1000;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:24px;transition:opacity .35s ease}
+#boot.done{opacity:0;pointer-events:none}
+#bootlog{font-size:12px;line-height:1.75;color:var(--amber);white-space:pre-wrap;
+  text-shadow:0 0 8px var(--glow);max-width:600px;width:100%;overflow:hidden}
+.cursor{display:inline-block;width:.62em;height:1.05em;vertical-align:-.15em;background:var(--amber);
+  box-shadow:0 0 6px var(--glow);animation:blink 1s steps(1) infinite}
+body.rm .cursor{animation:none}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* ---- ticker ---- */
+.ticker-wrap{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:var(--bg2);overflow:hidden;white-space:nowrap}
+.ticker{display:inline-block;padding:5px 0;animation:tick 60s linear infinite}
+body.rm .ticker{animation:none}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ticker b{color:var(--amber);font-weight:500}
+.ticker .up{color:var(--green)} .ticker .lv{color:var(--amber);text-shadow:0 0 8px var(--glow)}
+.ticker .sep{color:var(--faint);margin:0 10px}
+
+/* ---- header / nav ---- */
+header{border-bottom:1px solid var(--line);background:var(--panel)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 12px}
+@media(min-width:700px){.wrap{padding:0 20px}}
+.hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0 4px}
+.brand{font-weight:800;letter-spacing:.14em;font-size:15px;color:var(--amber);text-shadow:0 0 10px var(--glow)}
+.brand small{color:var(--dim);font-weight:400;letter-spacing:.06em;font-size:11px}
+.hd .clock{margin-left:auto;color:var(--mint);font-size:12px}
+.hd .clock .z{color:var(--faint)}
+nav{display:flex;gap:2px;flex-wrap:wrap;padding:4px 0 8px}
+.tab{padding:4px 10px;font-size:12px;letter-spacing:.08em;color:var(--dim);
+  border:1px solid transparent;text-transform:uppercase}
+.tab:hover{color:var(--ink);border-color:var(--line-hot)}
+.tab[aria-selected="true"]{color:var(--amber);border-color:var(--line-hot);background:var(--panel2);
+  box-shadow:inset 0 0 12px rgba(162,170,173,.08)}
+.tab .k{color:var(--faint);font-size:10px;margin-right:5px}
+.tab[aria-selected="true"] .k{color:var(--amber-dim)}
+
+/* ---- sections / panels ---- */
+main{padding:0 0 84px}
+.sec{display:none}
+.sec.active{display:block}
+.sec-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:18px 0 8px;
+  border-bottom:1px solid var(--line);padding-bottom:6px}
+.sec-h h2{font-size:12px;font-weight:700;letter-spacing:.22em;color:var(--amber);text-transform:uppercase;
+  text-shadow:0 0 10px rgba(162,170,173,.3)}
+.sec-h .sub{color:var(--faint);font-size:11px}
+.sec-h .right{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.panel{border:1px solid var(--line);background:var(--panel);margin-top:12px}
+.p-h{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);
+  background:var(--panel2);font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.p-h .hint{margin-left:auto;color:var(--faint);letter-spacing:.04em;text-transform:none;font-size:10.5px}
+
+/* ---- monitor strip ---- */
+.monitor{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;padding:10px}
+.m-game{border:1px solid var(--line);background:var(--panel2);padding:10px 12px;position:relative}
+.m-game.live{border-color:rgba(162,170,173,.5);
+  background:linear-gradient(180deg,rgba(162,170,173,.07),transparent 65%),var(--panel2)}
+.m-game.live::before{content:"";position:absolute;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 26px rgba(162,170,173,.10)}
+.m-top{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase}
+.m-top .lg{color:var(--mint)}
+.m-top .st{margin-left:auto}
+.st-live{color:var(--amber);text-shadow:0 0 8px var(--glow)}
+.st-live .dot{display:inline-block;width:6px;height:6px;background:var(--red);margin-right:5px;
+  animation:blink 1.2s steps(1) infinite}
+body.rm .st-live .dot{animation:none}
+.st-final{color:var(--dim)}
+.m-row{display:flex;align-items:baseline;gap:10px;margin-top:7px}
+.m-team{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-team.lose{color:var(--dim)}
+.m-score{font-size:22px;font-weight:800;min-width:36px;text-align:right}
+.m-game.live .m-score{color:var(--amber);text-shadow:0 0 12px var(--glow)}
+.m-game.final .m-score{color:var(--ink)}
+.m-game.final .m-score.lose{color:var(--dim);font-weight:400}
+
+/* ---- games table + tools ---- */
+.tbl-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--line-dim)}
+.tbl-tools label{font-size:10px;color:var(--faint);letter-spacing:.14em;text-transform:uppercase}
+select{padding:4px 8px}
+.chip{font-size:11px;padding:3px 10px;border:1px solid var(--line-hot);color:var(--dim);letter-spacing:.06em}
+.chip:hover{border-color:var(--amber-dim)}
+.chip.on{color:var(--amber);border-color:var(--amber-dim);background:rgba(162,170,173,.10);
+  text-shadow:0 0 8px var(--glow)}
+.count{margin-left:auto;font-size:11px;color:var(--faint)}
+.count b{color:var(--amber);font-weight:500}
+.tbl-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{position:sticky;top:0;z-index:5;background:var(--panel2);color:var(--faint);font-size:10px;
+  font-weight:500;letter-spacing:.14em;text-transform:uppercase;text-align:left;
+  padding:6px 8px;border-bottom:1px solid var(--line)}
+tbody td{padding:7px 8px;border-bottom:1px solid var(--line-dim);vertical-align:middle}
+tbody tr:hover td{background:rgba(162,170,173,.045)}
+tr.live td{background:rgba(162,170,173,.07)}
+tr.live:hover td{background:rgba(162,170,173,.11)}
+tr.live td:first-child{box-shadow:inset 2px 0 0 var(--amber)}
+td.t{color:var(--mint);white-space:nowrap;width:74px}
+td.g{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0;width:42%}
+td.g .v{color:var(--faint)}
+td.score{font-weight:700;font-size:14px;min-width:34px;text-align:right;white-space:nowrap}
+td.score.live-glow{color:var(--amber);text-shadow:0 0 10px var(--glow)}
+td.st{white-space:nowrap;width:110px;font-size:11px;letter-spacing:.08em}
+td.st .lv{color:var(--amber);text-shadow:0 0 8px var(--glow)}
+td.st .dot{display:inline-block;width:6px;height:6px;background:var(--red);margin-right:5px;
+  animation:blink 1.2s steps(1) infinite}
+body.rm td.st .dot{animation:none}
+td.st .fn{color:var(--faint)}
+td.st .pr{color:var(--blue)}
+td.lgc{color:var(--dim);font-size:11px;white-space:nowrap}
+
+/* ---- list rows (leaders / wire notes) ---- */
+.ld{padding:6px 0}
+.ld-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:baseline;
+  padding:7px 12px;border-bottom:1px solid var(--line-dim);font-size:12.5px}
+.ld-row:last-child{border-bottom:0}
+.ld-row .rk{color:var(--faint)}
+.ld-row.top1 .rk{color:var(--amber);text-shadow:0 0 8px var(--glow)}
+.ld-row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ld-row .nm .tm{color:var(--dim);font-size:11px}
+.ld-row .nm .bar{display:inline-block;height:7px;background:linear-gradient(90deg,var(--amber-dim),var(--amber));
+  vertical-align:baseline;margin-left:10px;transform:translateY(-1px);box-shadow:0 0 8px rgba(162,170,173,.35)}
+.ld-row .pts{font-weight:700;color:var(--amber)}
+.ld-row .pts small{color:var(--faint);font-weight:400;font-size:10px;margin-left:4px}
+.ld-row.note{grid-template-columns:1fr;color:var(--dim);font-size:12px}
+.ld-row.note b{color:var(--mint);font-weight:500}
+
+/* ---- analytics bars ---- */
+.bars{padding:10px 12px 12px}
+.bar-row{display:grid;grid-template-columns:64px 1fr 28px;gap:10px;align-items:baseline;
+  padding:4px 0;font-size:12px}
+.bar-row .bl{color:var(--dim)}
+.bar-row .bf{color:var(--amber);text-shadow:0 0 8px var(--glow);white-space:nowrap;overflow:hidden}
+.bar-row .bn{text-align:right;color:var(--ink);font-weight:700}
+
+/* ---- command line ---- */
+.cmd{position:fixed;left:0;right:0;bottom:0;z-index:900;background:var(--panel);
+  border-top:1px solid var(--line-hot);box-shadow:0 -10px 30px rgba(0,0,0,.65)}
+.cmd-in{display:flex;align-items:center;gap:8px;padding:9px 12px;max-width:1120px;margin:0 auto}
+.ps1{color:var(--mint);font-weight:700;white-space:nowrap;font-size:12px}
+.ps1 .path{color:var(--faint);font-weight:400}
+#cmdline{flex:1;background:transparent;border:0;box-shadow:none;padding:2px 0;font-size:13px;
+  caret-color:var(--amber)}
+#cmdline:focus{border:0;box-shadow:none}
+.hintkeys{display:none;color:var(--faint);font-size:10.5px;white-space:nowrap}
+@media(min-width:760px){.hintkeys{display:block}}
+.hintkeys b{color:var(--dim);font-weight:500;border:1px solid var(--line-hot);padding:1px 5px;margin:0 2px}
+#toast{position:fixed;bottom:58px;left:50%;transform:translateX(-50%) translateY(8px);
+  background:var(--panel2);border:1px solid var(--amber-dim);color:var(--amber);
+  padding:7px 14px;font-size:12px;opacity:0;pointer-events:none;z-index:910;
+  transition:opacity .2s,transform .2s;box-shadow:0 0 20px rgba(0,0,0,.6),0 0 12px rgba(162,170,173,.15);
+  white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---- search row ---- */
+.search-row{padding:10px}
+.pl-hint{color:var(--faint);font-size:11px;padding:8px 10px 0}
+.pl-hint b{color:var(--mint);font-weight:500}
+
+/* ---- mobile ---- */
+@media(max-width:520px){
+  body{font-size:12px}
+  .brand small{display:none}
+  .hd .clock{font-size:11px}
+  .ld-row .nm .bar{display:none}
+  .m-score{font-size:19px}
+  td.st{width:86px}
+  .tab{padding:5px 8px;font-size:11px}
+}
+@media(max-width:390px){
+  .tbl-tools{gap:6px}
+  .chip{padding:3px 7px}
+  table{font-size:11.5px}
+  td.st{width:76px;font-size:10px}
+  .bar-row{grid-template-columns:52px 1fr 24px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body class="crt">
+
+<!-- ============ BOOT SPLASH ============ -->
+<div id="boot" role="status" aria-label="CAHL Wire terminal booting">
+  <pre id="bootlog" aria-hidden="true"></pre>
+</div>
+
+<!-- ============ TICKER ============ -->
+<div class="ticker-wrap" aria-hidden="true"><div class="ticker" id="ticker"></div></div>
+
+<!-- ============ HEADER ============ -->
+<header>
+  <div class="wrap">
+    <div class="hd">
+      <div class="brand">CAHL WIRE <small>v44 · chiller adult hockey league · columbus, oh</small></div>
+      <div class="clock num"><span id="clock">--:--:--</span> <span class="z">ET</span></div>
+    </div>
+    <nav role="tablist" aria-label="CAHL Wire sections">
+      <button class="tab" role="tab" id="tab-today" aria-selected="true" data-sec="today"><span class="k">[T]</span>Today</button>
+      <button class="tab" role="tab" id="tab-league" aria-selected="false" data-sec="league"><span class="k">[L]</span>League</button>
+      <button class="tab" role="tab" id="tab-team" aria-selected="false" data-sec="team"><span class="k">[M]</span>My Team</button>
+      <button class="tab" role="tab" id="tab-players" aria-selected="false" data-sec="players"><span class="k">[P]</span>Players</button>
+      <button class="tab" role="tab" id="tab-analytics" aria-selected="false" data-sec="analytics"><span class="k">[A]</span>Analytics</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ TODAY ============ -->
+  <section class="sec active" id="sec-today" role="tabpanel" aria-labelledby="tab-today">
+    <div class="panel">
+      <div class="p-h">▮ MONITOR — LIVE GAME STATE <span class="hint">auto-refresh 15s · amber = on the wire</span></div>
+      <div class="monitor" id="monitor"></div>
+    </div>
+
+    <div class="panel">
+      <div class="p-h">▮ TONIGHT'S TOP GUNS — POINTS <span class="hint">real feed · today</span></div>
+      <div class="ld" id="leadersToday"></div>
+    </div>
+
+    <div class="sec-h">
+      <h2>Tonight's Slate</h2>
+      <span class="sub" id="slateDate"></span>
+      <div class="right">
+        <label for="lgSel">LEAGUE</label>
+        <select id="lgSel"><option value="">ALL</option></select>
+        <button class="chip on" id="chipLF">LIVE+FINAL</button>
+        <button class="chip" id="chipAll">ALL</button>
+        <span class="count num" id="slateCount"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="p-h">▮ SLATE — 15 GAMES <span class="hint">[F] toggle live+final · [R] refresh</span></div>
+      <div class="tbl-scroll">
+        <table id="gamesTbl">
+          <thead><tr>
+            <th>ET</th><th>Matchup</th><th style="text-align:right">Score</th>
+            <th>Status</th><th>LG</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEAGUE ============ -->
+  <section class="sec" id="sec-league" role="tabpanel" aria-labelledby="tab-league">
+    <div class="sec-h"><h2>League Desk</h2><span class="sub">division standings · wire format</span></div>
+    <div class="panel">
+      <div class="p-h">▮ STANDINGS — MON D25 DIVISION <span class="hint">DEMO DATA · wire up /api/standings</span></div>
+      <div class="tbl-scroll">
+        <table id="standingsTbl">
+          <thead><tr><th>#</th><th>Team</th><th>GP</th><th>W</th><th>OTL</th><th>L</th><th>PTS</th><th>DIFF</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-h">▮ WIRE NOTE</div>
+      <div class="ld">
+        <div class="ld-row note"><span>STANDINGS FEED: production table renders from the chillerstats scrape — same wire, zero chrome. Division filter lands with the live feed.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY TEAM ============ -->
+  <section class="sec" id="sec-team" role="tabpanel" aria-labelledby="tab-team">
+    <div class="sec-h"><h2>Team Desk</h2><span class="sub">SWAMP DONKEYS · owner's club · MON D25</span></div>
+    <div class="panel">
+      <div class="p-h">▮ ROSTER — SWAMP DONKEYS <span class="hint">DEMO ROSTER</span></div>
+      <div class="tbl-scroll">
+        <table id="rosterTbl">
+          <thead><tr><th>#</th><th>Player</th><th>POS</th><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>PIM</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="p-h">▮ NEXT GAME — WIRE NOTE</div>
+      <div class="ld" id="teamNext"></div>
+    </div>
+  </section>
+
+  <!-- ============ PLAYERS ============ -->
+  <section class="sec" id="sec-players" role="tabpanel" aria-labelledby="tab-players">
+    <div class="sec-h"><h2>Player Index</h2><span class="sub">5,930 players on the wire · type to search</span></div>
+    <div class="panel">
+      <div class="p-h">▮ SEARCH — 5,930 INDEXED <span class="hint">min 2 chars · name or team</span></div>
+      <div class="search-row">
+        <label for="plSearch" class="sr">Search players by name or team</label>
+        <input id="plSearch" type="search" placeholder="type a name… e.g. vonderahe" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="pl-hint" id="plHint"></div>
+      <div class="tbl-scroll">
+        <table id="plTbl">
+          <thead><tr><th>#</th><th>Player</th><th>Team</th><th>GP</th><th>G</th><th>A</th><th>PTS</th><th>PIM</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ANALYTICS ============ -->
+  <section class="sec" id="sec-analytics" role="tabpanel" aria-labelledby="tab-analytics">
+    <div class="sec-h"><h2>Analytics Desk</h2><span class="sub">computed live from the wire</span></div>
+    <div class="panel">
+      <div class="p-h">▮ SLATE LOAD — GAMES PER 30-MIN WINDOW</div>
+      <div class="bars" id="loadBars"></div>
+    </div>
+    <div class="panel">
+      <div class="p-h">▮ WIRE TOTALS</div>
+      <div class="ld" id="wireTotals"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ COMMAND LINE ============ -->
+<div class="cmd">
+  <div class="cmd-in">
+    <span class="ps1"><span class="path">cahl@wire:~</span>$</span>
+    <input id="cmdline" aria-label="Command line — type help for commands" placeholder="type a command… try 'help'" autocomplete="off" spellcheck="false">
+    <span class="hintkeys" aria-hidden="true">keys: <b>T</b><b>L</b><b>M</b><b>P</b><b>A</b> tabs · <b>F</b> filter · <b>/</b> cmd</span>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= REAL DATA — tonight's 15 games (ET) ================= */
+const GAMES=[
+ {t:"8:40 PM", h:"Cyclones",              a:"Goalie Guacamole",         lg:"CIN-C2", st:"final", hs:4, as:2},
+ {t:"9:40 PM", h:"Parking Lot Beers",     a:"Triple D",                 lg:"CIN-C4", st:"pre"},
+ {t:"9:50 PM", h:"Dayton Hawks",          a:"Dayton Fire",              lg:"DAY-B1", st:"pre"},
+ {t:"9:50 PM", h:"C Black Pizza (Saucy)", a:"Carlucci's Pizza Red",     lg:"COL-C3", st:"pre"},
+ {t:"10:00 PM",h:"Busch League",          a:"Brew Jackets",             lg:"COL-B2", st:"live", hs:2, as:1, clk:"2ND 8:42"},
+ {t:"10:00 PM",h:"The Beer Barrel Boys",  a:"Gang Green",               lg:"COL-C1", st:"pre"},
+ {t:"10:00 PM",h:"Goose Eggs",            a:"The Scorners",             lg:"COL-D2", st:"pre"},
+ {t:"10:00 PM",h:"Whiskey Warriors",      a:"Vandelay Industries",      lg:"COL-D3", st:"live", hs:0, as:1, clk:"1ST 4:10"},
+ {t:"10:05 PM",h:"Cyclops",               a:"Goodfellas",               lg:"COL-B1", st:"pre"},
+ {t:"10:30 PM",h:"Shakers Raw Dogs",      a:"The Chicken Selects",      lg:"COL-D4", st:"pre"},
+ {t:"10:30 PM",h:"Bu-Hockkey BT5",        a:"T5P Hockey",               lg:"COL-B5", st:"pre"},
+ {t:"10:50 PM",h:"Winking Lizard",        a:"Birdie Juicers",           lg:"COL-C2", st:"pre"},
+ {t:"11:00 PM",h:"Puck Buddies",          a:"The tip in",               lg:"COL-D1", st:"pre"},
+ {t:"11:10 PM",h:"Brewins",               a:"The Wobbly Pirates",       lg:"COL-C4", st:"pre"},
+ {t:"11:10 PM",h:"CockTails and Dreams",  a:"Goal Train",               lg:"COL-D5", st:"pre"}
+];
+
+/* ================= REAL DATA — today's points leaders ================= */
+const LEADERS=[
+ {n:"William Vonderahe",   tm:"Black and Tan",         p:5, g:2, a:3, gp:1, pim:0},
+ {n:"Brandon Spickler",    tm:"Hamilton Mustangs Thu", p:4, g:1, a:3, gp:1, pim:0},
+ {n:"Will Wuotila",        tm:"Fluffers",              p:4, g:3, a:1, gp:1, pim:2},
+ {n:"John Kemp",           tm:"Black and Tan",         p:3, g:0, a:3, gp:1, pim:0},
+ {n:"Matthew Brancaleone", tm:"Hamilton Mustangs Thu", p:2, g:1, a:1, gp:1, pim:0}
+];
+
+/* ================= DEMO DATA (labeled) ================= */
+const STANDINGS=[
+ {tm:"Gang Green",    gp:10,w:8,otl:1,l:1,pts:17,diff:"+18"},
+ {tm:"Swamp Donkeys", gp:10,w:6,otl:2,l:2,pts:16,diff:"+9", mine:true},
+ {tm:"The Scorners",  gp:10,w:5,otl:3,l:2,pts:15,diff:"+4"},
+ {tm:"Brew Jackets",  gp:10,w:4,otl:4,l:2,pts:14,diff:"-2"},
+ {tm:"Goose Eggs",    gp:10,w:2,otl:6,l:2,pts:8, diff:"-14"},
+ {tm:"Puck Buddies",  gp:10,w:1,otl:8,l:1,pts:5, diff:"-21"}
+];
+const ROSTER=[
+ {no:4, n:"Mike Kehoe",     pos:"F", gp:9,g:6,a:5,pts:11,pim:4},
+ {no:8, n:"Dan Sullivan",   pos:"D", gp:9,g:1,a:7,pts:8, pim:6},
+ {no:11,n:"Chris Aldrich",  pos:"F", gp:8,g:5,a:3,pts:8, pim:0},
+ {no:17,n:"Rob Norris",     pos:"F", gp:9,g:3,a:4,pts:7, pim:12},
+ {no:21,n:"Travis Curnutte",pos:"D", gp:8,g:2,a:4,pts:6, pim:8},
+ {no:23,n:"Kevin Boyle",    pos:"F", gp:7,g:4,a:1,pts:5, pim:2},
+ {no:33,n:"Matt Hoying",    pos:"G", gp:9,g:0,a:0,pts:0, pim:0},
+ {no:88,n:"Jake Largent",   pos:"F", gp:9,g:2,a:2,pts:4, pim:10}
+];
+const EXTRAS=[
+ {n:"Nick Gross",   tm:"Winking Lizard",        pos:"F",gp:8,g:7,a:5,pts:12,pim:6},
+ {n:"Tony Savko",   tm:"Busch League",          pos:"D",gp:8,g:2,a:6,pts:8, pim:4},
+ {n:"Eric Hruby",   tm:"Brew Jackets",          pos:"F",gp:9,g:5,a:2,pts:7, pim:0},
+ {n:"CJ Posey",     tm:"Goal Train",            pos:"F",gp:9,g:4,a:3,pts:7, pim:8},
+ {n:"Ryan Bex",     tm:"CockTails and Dreams",  pos:"F",gp:8,g:3,a:3,pts:6, pim:2},
+ {n:"Austin Hooper",tm:"The Scorners",          pos:"F",gp:9,g:2,a:4,pts:6, pim:14}
+];
+const ALL_PLAYERS=LEADERS.map(function(l){
+  return {n:l.n,tm:l.tm,pos:"F",gp:l.gp,g:l.g,a:l.a,pts:l.p,pim:l.pim};
+}).concat(EXTRAS,ROSTER.filter(function(r){return r.pos!=="G";}).map(function(r){
+  return {n:r.n,tm:"Swamp Donkeys",pos:r.pos,gp:r.gp,g:r.g,a:r.a,pts:r.pts,pim:r.pim};
+}));
+
+/* ================= state ================= */
+const RM=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+if(RM)document.body.classList.add("rm");
+const state={tab:"today",lg:"",mode:"lf"};
+const $=function(s){return document.querySelector(s);};
+const esc=function(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");};
+
+/* ================= boot sequence ================= */
+const BOOT_LINES=[
+"┌──────────────────────────────────────────────┐",
+"│  CAHL WIRE v44 - LOCKER-ROOM TERMINAL        │",
+"│  chiller adult hockey league · columbus, oh  │",
+"└──────────────────────────────────────────────┘",
+"",
+"> init phosphor display .............. OK",
+"> link chillerstats feed ............. OK",
+"> load slate: 15 games ............... OK",
+"> load player index: 5,930 ........... OK",
+"> sync clock: ET (UTC-04:00) ......... OK",
+"> mount command line ................. OK",
+"",
+"> hotkeys [T]ODAY [L]EAGUE [M]Y TEAM [P]LAYERS [A]NALYTICS",
+"READY - press [T] or type 'help' below"
+];
+(function boot(){
+  const log=$("#bootlog"),splash=$("#boot");
+  const text=BOOT_LINES.join("\n")+"_";
+  function finish(){
+    splash.classList.add("done");
+    setTimeout(function(){var b=document.getElementById("boot");if(b)b.remove();},RM?60:450);
+  }
+  if(RM){log.textContent=text;setTimeout(finish,350);return;}
+  /* time-capped typing: immune to background-tab timer throttling */
+  const t0=Date.now(),DUR=1300;
+  (function step(){
+    const p=Math.min(1,(Date.now()-t0)/DUR);
+    log.textContent=text.slice(0,Math.ceil(text.length*p));
+    if(p<1)setTimeout(step,16);
+    else{log.textContent=text;setTimeout(finish,500);}
+  })();
+})();
+
+/* ================= ticker ================= */
+function buildTicker(){
+  const parts=[];
+  GAMES.forEach(function(g){
+    if(g.st==="final")parts.push("<b>FINAL</b> "+esc(g.h.toUpperCase())+" "+g.hs+"-"+g.as+" "+esc(g.a.toUpperCase()));
+    else if(g.st==="live")parts.push("<span class='lv'>● LIVE</span> "+esc(g.h.toUpperCase())+" "+g.hs+"-"+g.as+" "+esc(g.a.toUpperCase())+" ("+g.clk+")");
+  });
+  parts.push("<b>TOP GUN</b> VONDERAHE 5 PTS (BLACK AND TAN)");
+  parts.push("SPICKLER 4 <span class='sep'>▸</span> WUOTILA 4 <span class='sep'>▸</span> KEMP 3");
+  parts.push("15 GAMES TONIGHT <span class='sep'>▪</span> 5,930 PLAYERS INDEXED <span class='sep'>▪</span> SWAMP DONKEYS OFF TONIGHT — NEXT TUE 10:10 PM");
+  const html=parts.join("<span class='sep'>▪</span>")+"<span class='sep'>▪▪▪</span>";
+  $("#ticker").innerHTML=html+html;
+}
+
+/* ================= clock ================= */
+function tickClock(){
+  try{
+    $("#clock").textContent=new Date().toLocaleTimeString("en-US",
+      {timeZone:"America/New_York",hour12:false});
+  }catch(e){
+    $("#clock").textContent=new Date().toLocaleTimeString("en-US",{hour12:false});
+  }
+}
+
+/* ================= tabs ================= */
+const TABS=["today","league","team","players","analytics"];
+function switchTab(name,quiet){
+  if(TABS.indexOf(name)<0)return;
+  state.tab=name;
+  TABS.forEach(function(t){
+    $("#sec-"+t).classList.toggle("active",t===name);
+    $("#tab-"+t).setAttribute("aria-selected",t===name?"true":"false");
+  });
+  try{history.replaceState(null,"","#"+name);}catch(e){}
+  if(!quiet)window.scrollTo(0,0);
+}
+
+/* ================= today: monitor + leaders + slate ================= */
+function statusCell(g){
+  if(g.st==="live")return "<span class='lv'><span class='dot'></span>LIVE "+g.clk+"</span>";
+  if(g.st==="final")return "<span class='fn'>FINAL</span>";
+  return "<span class='pr'>"+esc(g.t)+"</span>";
+}
+function renderMonitor(){
+  const watch=GAMES.filter(function(g){return g.st!=="pre";});
+  $("#monitor").innerHTML=watch.map(function(g){
+    const fin=g.st==="final";
+    const hw=fin&&g.hs>g.as, aw=fin&&g.as>g.hs;
+    const hCls="m-team"+(hw?"":" lose"), aCls="m-team"+(aw?"":" lose");
+    return "<div class='m-game "+g.st+"'>"+
+      "<div class='m-top'><span class='lg'>"+esc(g.lg)+"</span>"+
+      "<span class='st "+(g.st==="live"?"st-live":"st-final")+"'>"+
+      (g.st==="live"?"<span class='dot'></span>LIVE "+g.clk:"FINAL")+"</span></div>"+
+      "<div class='m-row'><span class='"+hCls+"'>"+esc(g.h)+"</span>"+
+      "<span class='m-score'>"+g.hs+"</span></div>"+
+      "<div class='m-row'><span class='"+aCls+"'>"+esc(g.a)+"</span>"+
+      "<span class='m-score'>"+g.as+"</span></div>"+
+      "<div class='m-row' style='margin-top:4px'><span style='font-size:10px;color:var(--faint)'>FACE-OFF "+esc(g.t)+" ET</span></div>"+
+      "</div>";
+  }).join("");
+}
+function renderLeaders(){
+  const max=LEADERS[0].p;
+  const row=function(l,i){
+    return "<div class='ld-row"+(i===0?" top1":"")+"'>"+
+      "<span class='rk num'>"+String(i+1).padStart(2,"0")+"</span>"+
+      "<span class='nm'>"+esc(l.n)+" <span class='tm'>("+esc(l.tm)+")</span>"+
+      "<span class='bar' style='width:"+Math.round(l.p/max*64)+"px'></span></span>"+
+      "<span class='pts num'>"+l.p+" <small>PTS</small></span></div>";
+  };
+  $("#leadersToday").innerHTML=LEADERS.map(row).join("");
+}
+function renderTable(){
+  const tb=$("#gamesTbl tbody");
+  const rows=GAMES.filter(function(g){
+    if(state.lg&&g.lg!==state.lg)return false;
+    if(state.mode==="lf"&&g.st==="pre")return false;
+    return true;
+  });
+  tb.innerHTML=rows.map(function(g){
+    const live=g.st==="live",fin=g.st==="final";
+    const hw=fin&&g.hs>g.as,aw=fin&&g.as>g.hs;
+    const score=fin||live
+      ?"<span class='"+(live?"live-glow":(hw||aw?"lead":""))+"'>"+g.hs+"&nbsp;–&nbsp;"+g.as+"</span>"
+      :"<span style='color:var(--faint)'>–&nbsp;–</span>";
+    return "<tr"+(live?" class='live'":"")+">"+
+      "<td class='t num'>"+esc(g.t)+"</td>"+
+      "<td class='g'><b>"+esc(g.h)+"</b> <span class='v'>vs</span> "+esc(g.a)+"</td>"+
+      "<td class='score num'>"+score+"</td>"+
+      "<td class='st'>"+statusCell(g)+"</td>"+
+      "<td class='lgc'>"+esc(g.lg)+"</td></tr>";
+  }).join("")||"<tr><td colspan='5' style='color:var(--faint);padding:14px'>NO GAMES MATCH FILTER — press [A]LL or clear league filter</td></tr>";
+  $("#slateCount").innerHTML="SHOWING <b>"+rows.length+"</b>/"+GAMES.length;
+}
+function fillLeagueSelect(){
+  const lgs=[].concat.apply([],GAMES.map(function(g){return [g.lg];}))
+    .filter(function(v,i,arr){return arr.indexOf(v)===i;}).sort();
+  $("#lgSel").innerHTML="<option value=''>ALL LEAGUES</option>"+
+    lgs.map(function(l){return "<option value='"+esc(l)+"'>"+esc(l)+"</option>";}).join("");
+}
+function setFilter(mode){
+  state.mode=mode;
+  $("#chipLF").classList.toggle("on",mode==="lf");
+  $("#chipAll").classList.toggle("on",mode==="all");
+  renderTable();
+}
+
+/* ================= league / team / players / analytics ================= */
+function renderStandings(){
+  $("#standingsTbl tbody").innerHTML=STANDINGS.map(function(s,i){
+    return "<tr"+(s.mine?" class='live'":"")+">"+
+      "<td class='num' style='color:var(--faint)'>"+(i+1)+"</td>"+
+      "<td"+(s.mine?" style='color:var(--amber);text-shadow:0 0 8px var(--glow)'":"")+">"+esc(s.tm)+(s.mine?" ◂":"")+"</td>"+
+      "<td class='num'>"+s.gp+"</td><td class='num'>"+s.w+"</td><td class='num'>"+s.otl+"</td>"+
+      "<td class='num'>"+s.l+"</td><td class='num' style='font-weight:700'>"+s.pts+"</td>"+
+      "<td class='num' style='color:"+(s.diff[0]==="+"?"var(--green)":"var(--red)")+"'>"+s.diff+"</td></tr>";
+  }).join("");
+}
+function renderRoster(){
+  $("#rosterTbl tbody").innerHTML=ROSTER.map(function(r){
+    const gk=r.pos==="G";
+    return "<tr><td class='num' style='color:var(--faint)'>"+r.no+"</td>"+
+      "<td>"+esc(r.n)+(r.no===21?" <span style='color:var(--amber-dim)'>◂ owner</span>":"")+"</td>"+
+      "<td style='color:"+(gk?"var(--blue)":"var(--mint)")+"'>"+r.pos+"</td>"+
+      "<td class='num'>"+r.gp+"</td><td class='num'>"+(gk?"—":r.g)+"</td>"+
+      "<td class='num'>"+(gk?"—":r.a)+"</td><td class='num' style='font-weight:700'>"+(gk?"—":r.pts)+"</td>"+
+      "<td class='num' style='color:var(--dim)'>"+r.pim+"</td></tr>";
+  }).join("");
+  $("#teamNext").innerHTML=
+    "<div class='ld-row note'><span><b>SWAMP DONKEYS NOT ON TONIGHT'S 15-GAME SLATE.</b> NEXT: TUE 10:10 PM vs GANG GREEN @ CHILLER-NORTH RINK 2 (DEMO). Tonight they sit 2nd in MON D25 — one point back.</span></div>";
+}
+function renderPlayers(){
+  const q=$("#plSearch").value.trim().toLowerCase();
+  let rows,note;
+  if(q.length<2){
+    rows=LEADERS.map(function(l){
+      return {n:l.n,tm:l.tm,pos:"F",gp:l.gp,g:l.g,a:l.a,pts:l.p,pim:l.pim};
+    });
+    note="INDEX <b>5,930</b> · showing tonight's top guns — type a name or team to search (demo slice)";
+  }else{
+    rows=ALL_PLAYERS.filter(function(p){
+      return p.n.toLowerCase().indexOf(q)>=0||p.tm.toLowerCase().indexOf(q)>=0;
+    });
+    note=rows.length
+      ?"<b>"+rows.length+"</b> match"+(rows.length===1?"":"es")+" for '"+esc(q)+"' (demo slice of 5,930)"
+      :"NO MATCH for '"+esc(q)+"' in demo slice — full index lands with the live feed";
+  }
+  $("#plHint").innerHTML=note;
+  $("#plTbl tbody").innerHTML=rows.map(function(p,i){
+    return "<tr><td class='num' style='color:var(--faint)'>"+String(i+1).padStart(2,"0")+"</td>"+
+      "<td style='white-space:nowrap'>"+esc(p.n)+"</td>"+
+      "<td style='color:var(--dim);font-size:11px;white-space:nowrap'>"+esc(p.tm)+"</td>"+
+      "<td class='num'>"+p.gp+"</td><td class='num'>"+p.g+"</td><td class='num'>"+p.a+"</td>"+
+      "<td class='num' style='font-weight:700;color:var(--amber)'>"+p.pts+"</td>"+
+      "<td class='num' style='color:var(--dim)'>"+p.pim+"</td></tr>";
+  }).join("")||"";
+}
+function renderAnalytics(){
+  const buckets={};
+  GAMES.forEach(function(g){
+    const m=g.t.match(/(\d+):(\d+) (AM|PM)/);if(!m)return;
+    let h=parseInt(m[1],10)%12;if(m[3]==="PM")h+=12;
+    const half=parseInt(m[2],10)<30?"00":"30";
+    const key=(h<10?"0":"")+h+":"+half;
+    buckets[key]=(buckets[key]||0)+1;
+  });
+  const keys=Object.keys(buckets).sort();
+  $("#loadBars").innerHTML=keys.map(function(k){
+    const n=buckets[k];
+    return "<div class='bar-row'><span class='bl'>"+k+"</span>"+
+      "<span class='bf'>"+"█".repeat(n*3)+"</span>"+
+      "<span class='bn num'>"+n+"</span></div>";
+  }).join("");
+  let goals=0,gFinal=0,gLive=0,live=0,finals=0;
+  GAMES.forEach(function(g){
+    if(g.st==="final"){finals++;gFinal+=g.hs+g.as;goals+=g.hs+g.as;}
+    if(g.st==="live"){live++;gLive+=g.hs+g.as;goals+=g.hs+g.as;}
+  });
+  const lgs=[].concat.apply([],GAMES.map(function(g){return [g.lg];}))
+    .filter(function(v,i,arr){return arr.indexOf(v)===i;}).length;
+  const row=function(k,v){return "<div class='ld-row note'><span><b>"+k+"</b> — "+v+"</span></div>";};
+  $("#wireTotals").innerHTML=
+    row("GAMES",GAMES.length+" on the wire · "+finals+" final · "+live+" live now")+
+    row("GOALS",goals+" logged ("+gFinal+" final · "+gLive+" live, wire-updating)")+
+    row("LEAGUES",lgs+" distinct division codes tonight · 8:40 PM → 11:10 PM ET window")+
+    row("INDEX","5,930 players · top gun VONDERAHE (BLACK AND TAN) 5 pts");
+}
+
+/* ================= toast ================= */
+let toastTimer=null;
+function toast(msg){
+  const t=$("#toast");
+  t.textContent=msg;t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.classList.remove("show");},2400);
+}
+
+/* ================= command line ================= */
+function runCmd(raw){
+  const s=raw.trim().toLowerCase();
+  if(!s)return;
+  const parts=s.split(/\s+/),cmd=parts[0],arg=parts.slice(1).join(" ");
+  switch(cmd){
+    case "help":
+      toast("CMDS: help · live · all · leaders · find <name> · goto <tab> · donkeys · refresh · time · clear");
+      break;
+    case "t": case "today": switchTab("today");toast("WIRE → TODAY · 15-GAME SLATE");break;
+    case "l": case "league": switchTab("league");toast("WIRE → LEAGUE DESK");break;
+    case "m": case "team": case "my team": switchTab("team");toast("WIRE → SWAMP DONKEYS");break;
+    case "p": case "players": switchTab("players");toast("WIRE → PLAYER INDEX · 5,930");break;
+    case "a": case "analytics": switchTab("analytics");toast("WIRE → ANALYTICS DESK");break;
+    case "donkeys": switchTab("team");toast("SWAMP DONKEYS · OFF TONIGHT · NEXT TUE 10:10 PM");break;
+    case "live": switchTab("today");setFilter("lf");toast("FILTER → LIVE+FINAL");break;
+    case "all": switchTab("today");setFilter("all");toast("FILTER → ALL 15 GAMES");break;
+    case "leaders": case "top": switchTab("players");$("#plSearch").value="";renderPlayers();
+      toast("TONIGHT'S TOP GUNS · VONDERAHE 5 PTS");break;
+    case "find": case "search":
+      if(!arg){toast("USAGE: find <name> — e.g. find vonderahe");break;}
+      switchTab("players");$("#plSearch").value=arg;renderPlayers();
+      toast("SEARCHING INDEX FOR '"+arg.toUpperCase()+"'");break;
+    case "goto":
+      if(TABS.indexOf(arg)>=0){switchTab(arg);toast("GOTO "+arg.toUpperCase());}
+      else if(arg.indexOf("donk")===0){switchTab("team");toast("GOTO SWAMP DONKEYS");}
+      else toast("UNKNOWN TAB: '"+arg+"' — TRY today/league/team/players/analytics");
+      break;
+    case "refresh": renderTable();renderMonitor();toast("WIRE REFRESHED "+$("#clock").textContent+" ET");break;
+    case "time": toast("LOCAL FEED TIME "+$("#clock").textContent+" ET (UTC-04:00)");break;
+    case "clear": $("#cmdline").value="";break;
+    default: toast("?UNKNOWN CMD: "+cmd.toUpperCase()+" — TRY 'help'");
+  }
+}
+
+/* ================= wiring ================= */
+document.querySelectorAll(".tab").forEach(function(b){
+  b.addEventListener("click",function(){switchTab(b.dataset.sec);});
+});
+$("#lgSel").addEventListener("change",function(e){state.lg=e.target.value;renderTable();});
+$("#chipLF").addEventListener("click",function(){setFilter("lf");toast("FILTER → LIVE+FINAL");});
+$("#chipAll").addEventListener("click",function(){setFilter("all");toast("FILTER → ALL 15 GAMES");});
+$("#plSearch").addEventListener("input",renderPlayers);
+$("#cmdline").addEventListener("keydown",function(e){
+  if(e.key==="Enter"){runCmd(e.target.value);e.target.value="";}
+  if(e.key==="Escape")e.target.blur();
+});
+document.addEventListener("keydown",function(e){
+  const tag=(e.target.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="select"||tag==="textarea")return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==="/"){e.preventDefault();$("#cmdline").focus();return;}
+  if(k==="f"&&state.tab==="today"){
+    setFilter(state.mode==="lf"?"all":"lf");
+    toast(state.mode==="lf"?"FILTER → LIVE+FINAL":"FILTER → ALL 15 GAMES");return;
+  }
+  if(k==="r"){renderTable();renderMonitor();toast("WIRE REFRESHED "+$("#clock").textContent+" ET");return;}
+  if(k==="t")switchTab("today");
+  else if(k==="l")switchTab("league");
+  else if(k==="m")switchTab("team");
+  else if(k==="p")switchTab("players");
+  else if(k==="a")switchTab("analytics");
+});
+
+/* ================= init ================= */
+buildTicker();
+tickClock();setInterval(tickClock,1000);
+fillLeagueSelect();
+renderMonitor();
+renderLeaders();
+renderTable();
+renderStandings();
+renderRoster();
+renderPlayers();
+renderAnalytics();
+$("#slateDate").textContent="TONIGHT · 8:40 PM → 11:10 PM ET · ALL TIMES EASTERN";
+(function(){
+  const h=(location.hash||"").replace("#","");
+  if(TABS.indexOf(h)>=0)switchTab(h,true);
+})();
+})();
+</script>
+</body>
+</html>

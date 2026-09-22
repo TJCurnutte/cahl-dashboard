@@ -1,0 +1,148 @@
+=== RM block contents (style.css) ===
+--- L1216-1222 ---
+1216: @media (prefers-reduced-motion: reduce) {
+1217:   .sb-card[data-status="live"]::before, .sb-live::before, .live-dot, .live-dot-inline,
+1218:   .t-score.live-badge, .status-chip.status-live, .game-card .live, .pal-ov .spinner { animation: none !important; }
+1219:   .skeleton::after, .skeleton-card::after { animation: none !important; }
+1220:   .sb-num.flash { animation: none !important; }
+1221:   *, *::before, *::after { transition-duration: 0.01ms !important; }
+1222: }
+1223: 
+--- L1296-1299 ---
+1296: @media (prefers-reduced-motion: reduce) {
+1297:   .hero-glow::before { animation: none !important; }
+1298:   .hero-next-dot { animation: none !important; }
+1299: }
+1300: 
+--- L1402-1406 ---
+1402: @media (prefers-reduced-motion: reduce) {
+1403:   .card, .sb-card, .sb-list > *, .fade-in { animation: none !important; }
+1404:   .sb-list > * { animation-delay: 0s !important; }
+1405:   .sb-card:hover, .sb-card:active { transform: none !important; }
+1406: }
+1407: 
+--- L1607-1608 ---
+1607:    Static (no animation) so prefers-reduced-motion needs no guard.
+1608:    ============================================================ */
+1609: .hero-card::before {
+=== landing.css RM block ===
+211: @media (max-width: 430px) {
+212:   .lp-title { font-size: 26px; }
+213:   .gate-cta { min-height: 50px; padding: 0 26px; font-size: 16px; }
+214: }
+215: 
+216: @media (prefers-reduced-motion: reduce) {
+217:   #landingGate, .gate-cta, .gate-cta .cta-arrow, .lp-sponsor-card, .lp-links a, .sponsor-strip { transition: none; }
+218: }
+=== selectPlayerToken def + roster-player delegation ===
+2728: 
+2729:       // Roster row → profile with game-log context
+2730:       const rp = e.target.closest('.roster-player');
+2731:       if (rp) {
+2732:         openPlayer({
+2733:           token: rp.dataset.token,
+2734:           teamId: rp.dataset.tid,
+2735:           teamName: rp.dataset.tname,
+2736:           playerName: rp.dataset.pname,
+2737:         });
+   ...
+=== all 'roster-player' refs ===
+  L2184: <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="
+  L2206: <tr class="link roster-player" data-token="${p.token || ''}" data-tid="${teamId}" data-tname="${esc(over.team_name)}" data-pname="
+  L2730: const rp = e.target.closest('.roster-player');
+=== try/finally catch structure around team fetch L1988-2060 ===
+1988:       // replaces the inline 8s/20s pair that raced api()'s 30s ceiling.
+1989:       const disarm = armSkeletonWatchdog($('#teamContent'), 'your team', `loadTeamContent('${teamId}', true)`);
+1990:       let data = null;
+1991:       let hardFail = null;
+1992:       try {
+1993:         const ctrl = new AbortController();
+1994:         const timer = setTimeout(() => ctrl.abort(), 25000);
+1995:         try {
+1996:           const res = await fetch(`/api/team/${teamId}` + (refresh ? '?_=' + Date.now() : ''), { signal: ctrl.signal, cache: 'no-store' });
+1997:           data = await res.json();
+1998:         } finally { clearTimeout(timer); }
+1999:         if (data.error) {
+2000:           // R8-A self-heal: a saved team whose upstream page is gone (old
+2001:           // season, renamed slug) must not dead-end the tab forever. Clear the
+2002:           // stale id, fall back to the picker, and let the user re-pick once.
+2003:           const dead = /no longer available/i.test(String(data.error));
+2004:           if (dead) {
+2005:             state.teamId = '';
+2006:             localStorage.removeItem('cahl-team');
+2007:             if (state.myTeam === teamId) { state.myTeam = ''; localStorage.removeItem('cahl-myteam'); }
+2008:             $content.innerHTML = `<div class="card"><div class="empty">${esc(data.error)}</div>`
+2009:               + `<div class="picker-hint" style="margin-top:12px">Pick your team below to save a new one.</div></div>`;
+2010:             renderTeam(); // re-render the card with picker + search visible
+2011:             return;
+2012:           }
+2013:           $content.innerHTML = `<div class="error">${esc(data.error)}</div>`;
+2014:           return;
+2015:         }
+2016: 
+2017:         const over = data.overview;
+2018:         const standings = data.standings || [];
+2019:       const rankIdx = standings.findIndex(s => s.team_id === teamId);
+2020:       const rank = rankIdx >= 0 ? rankIdx + 1 : 0;
+2021:       const rankSuffix = rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th';
+2022:       const icalUrl = `https://www.chillerstats.com/team/calendar_export.cfm?TeamID=${teamId}`;
+2023: 
+2024:       // Playoff-race badge from the magic-number calculator
+2025:       const raceBadge = (() => {
+2026:         const r = data.race;
+2027:         if (!r) return '';
+2028:         if (r.status === 'clinched') return '<span class="race-badge clinched">Clinched</span>';
+2029:         if (r.status === 'eliminated') return '<span class="race-badge eliminated">Eliminated</span>';
+2030:         if (r.status === 'playoffs') return '<span class="race-badge playoffs">Playoffs</span>';
+2031:         if (r.status === 'help') return '<span class="race-badge help">Needs help</span>';
+2032:         if (r.status === 'alive' && r.magic > 0) return `<span class="race-badge alive">Magic # ${r.magic}</span>`;
+2033:         return '';
+2034:       })();
+2035: 
+2036:       const myTeamBadge = state.myTeam === teamId
+2037:         ? '<span class="hero-rank my-team-star" title="Your saved team">\u2605 My Team</span>'
+2038:         : `<button class="ghost small" onclick="makeMyTeam('${teamId}')" title="Save as your default team">Set as My Team</button>`;
+2039: 
+2040:       let html = `<div class="team-head">
+2041:         <h3 style="color:var(--text);margin:0">${esc(over.team_name)}</h3>
+2042:         <div class="team-head-actions">
+2043:           ${myTeamBadge}
+2044:           ${raceBadge}
+2045:           ${rank ? `<span class="hero-rank">${rank}${rankSuffix} of ${standings.length}</span>` : ''}
+2046:           <a class="ghost small btn-link" href="${icalUrl}" target="_blank" rel="noopener" title="Subscribe to this team's schedule in your 
+2047:           <button class="ghost small" onclick="shareTeamResult('${teamId}')" title="Copy last result to share">Share</button>
+2048:         </div>
+2049:       </div>`;
+2050: 
+2051:       if (data.playoffs && data.playoffs.length) {
+2052:         html += playoffsHtml(data.playoffs);
+2053:       }
+2054: 
+2055:       html += '<div id="teamAwardsMount"></div>';
+2056: 
+2057:       // Current session record (labeled from ChillerStats breadcrumb) + published awards only
+2058:       const form = data.form || {};
+2059:       const sessionLabel = (data.current_session && data.current_session.label) || data.season || '';
+2060:       const awards = data.awards || [];
+2061:       if (awards.length) {
+2062:         html += '<div class="award-row">';
+=== 'partial' handling in app.js ===
+  L339: if (!Array.isArray(data) && data.partial) {
+  L372: if (query.length < 2) return { players: [], error: null, partial: false };
+  L386: partial: !!(data && data.partial),
+  L392: partial: false,
+  L551: const extra = result.partial ? ' Index still filling \u2014 tap to retry.' : '';
+  L1937: // Error payload / partial response guard: fall back to the cached
+  L2285: $hi.innerHTML = previousSessionsHtml(data.previous || [], data.partial ? 'Still gathering older sessions from ChillerStats…' : und
+=== players payload 'partial' value ===
+partial = False | n players = 5862
+=== leagues endpoint ===
+  L1467: data = await api(`/api/league/${leagueId}`, refresh);
+  L1936: const data = await api(`/api/league/${state.leagueId}`);
+  L2316: const data = await api(`/api/league/${state.playersLeague}`, refresh);
+  L2449: data = await api(`/api/league/${state.leagueId}`, refresh);
+=== dead-team probe retry x2 ===
+  attempt 1: 2.07s status=HTTP Error 502: Bad Gateway body=None
+  attempt 2: 3.52s status=HTTP Error 502: Bad Gateway body=None
+=== league probe with real league name ===
+  /api/league/Sunday C West  5.00s status=HTTP Error 502: Bad Gateway bytes=0
