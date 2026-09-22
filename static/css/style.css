@@ -1189,6 +1189,11 @@ body.has-live .live-dot { display: inline-block; }
     grid-template-areas: "time home board away rink";
   }
   .today-row .t-home, .today-row .t-away { font-size: 16px; }
+  /* Comment round 09-22: the dash separator read as glued to the away team because
+     home names are left-aligned in their column (short names leave a void before the
+     board). Right-align the home name so it hugs the dash — the standard
+     "AWAY … | – | … HOME" scoreboard reading, with the dash centered in its column. */
+  .today-row .t-home { text-align: right; padding-right: 2px; }
   .today-row .t-board { justify-content: center; }
   .today-row .t-rink { justify-self: stretch; max-width: none; text-align: center; }
   .games-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
